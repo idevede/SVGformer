@@ -5,7 +5,9 @@ from models.model import Informer, InformerStack
 import pickle as pkl
 
 from utils.tools import EarlyStopping, adjust_learning_rate
-from utils.metrics import metric
+from utils.metrics import metric, get_acc_p_r_f1, get_acc
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
+
 from torch.autograd import Variable
 
 import numpy as np
@@ -218,9 +220,10 @@ class Exp_Informer(Exp_Basic):
         for i, (batch_x,batch_y,cls_label,mask, name,label) in enumerate(vali_loader):
             #print(i)
             cls_label = cls_label.float().to(self.device)
+            label = torch.tensor(label).long().to(self.device)
             mask = mask.float().to(self.device)
             pred = self._process_one_batch(
-                    train_data, batch_x, batch_y, cls_label, mask, )
+                    vali_data, batch_x, batch_y, cls_label, mask, )
 
             loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
 
@@ -271,7 +274,7 @@ class Exp_Informer(Exp_Basic):
                 
                 model_optim.zero_grad()
                 pred = self._process_one_batch(
-                    train_data, batch_x, batch_y, cls_label, mask, )
+                    train_data, batch_x, batch_y, cls_label, mask )
 
                 loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
 
@@ -340,91 +343,43 @@ class Exp_Informer(Exp_Basic):
         trues = None
 
         # result save
-        folder_path = './results_deepsvg_format/' + setting +'debug/'
+        folder_path = './results_deepsvg_format/cls_task/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        results_pred = {}
-        results_lable = {}
-
-        
+        class_lable = []
+        class_pred = []
+        flag = False
         for i, (batch_x,batch_y,cls_label,mask,name, label) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
             mask = mask.float().to(self.device)
-            pred, true, pred_cls, _, _ = self._process_one_batch(
-                test_data, batch_x, batch_y, cls_label, mask)
+            pred = self._process_one_batch(
+                    test_data, batch_x, batch_y, cls_label, mask )
+            # pred, true, pred_cls, _, _ = self._process_one_batch(
+            #     test_data, batch_x, batch_y, cls_label, mask)
             #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
 
             
 
-            probs = F.softmax(pred_cls, dim=-1)
+            probs = F.softmax(pred, dim=-1)
             _, pred_class = torch.topk(probs, k=1, dim=-1)
-            data_pad = -1*torch.ones((true.shape[0],true.shape[1],5)).to(self.device)
-            #pred[:,:,0] = pred_class[:,:,0]
-            
-            pred_class = torch.cat((cls_label.unsqueeze(-1)[:,:1,:],pred_class),1)
 
-            pred_mask = self.CMD_ARGS_MASK[pred_class.long()].squeeze().to(self.device)
-
-            pred = torch.cat((true[:,:1,:],pred),1)
-            #pred = pred*mask
-            pred = pred*pred_mask
-            pred_tmp = pred.reshape(-1,8).detach().cpu().numpy()
-            pred_tmp[pred_tmp.sum(axis=1)==0,:] = -1
-            pred = torch.tensor(pred_tmp.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
+            if not flag:
+                preds = pred_class.detach().cpu().numpy().reshape(-1)
+                trues = label.detach().cpu().numpy().reshape(-1)
+                flag = True
             
-            #mask by pred
-            
-            cls_label = cls_label.reshape(-1,1).detach().cpu().numpy()
-            pred_class = pred_class.reshape(-1,1).detach().cpu().numpy()
-            pred_class[cls_label==-1] = -1
-            pred_class = torch.tensor(pred_class.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
-            cls_label = torch.tensor(cls_label.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
-
-            
-            
-            pred = torch.cat((pred_class,data_pad,pred),2)
-            # layouts = torch.cat((x[:, :1], pred[:, :, 0]), dim=1).detach().cpu().numpy()
-             #(pred*mask).detach().cpu().numpy()
-            true = torch.cat((cls_label,data_pad,true),2)
-            # np.save('./layouts_pred.csv', layouts)
-            # np.save('./layouts_label.csv', x.cpu().numpy())
-            
-            p_data = pred.detach().cpu().numpy()
-            for i in range(len(p_data)):
-                results_pred[name[i]] = p_data[i]
-                results_lable[name[i]] = true[i]
-                #np.save(folder_path+ name[i] +'.npy', p_data[i])
-
-            if preds is not None:
-                preds = np.concatenate((preds,pred.detach().cpu().numpy()),0)
-                trues = np.concatenate((trues,true.detach().cpu().numpy()),0)
             else:
-                preds = pred.detach().cpu().numpy()
-                trues = true.detach().cpu().numpy()
-
-
-        preds = np.array(preds)
-        trues = np.array(trues)
-        print('test shape:', preds.shape, trues.shape)
-        # preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        # trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-        #print('test shape:', preds.shape, trues.shape)
-
-        
-
-        # mae, mse, rmse, mape, mspe = metric(preds, trues)
-        # print('mse:{}, mae:{}'.format(mse, mae))
-
-        # np.save(folder_path+'metrics_' +str(ii) +'.npy', np.array([mae, mse, rmse, mape, mspe]))
-        np.save(folder_path+'pred_' +str(ii) +'.npy', preds)
-        np.save(folder_path+'true_' +str(ii) +'.npy', trues)
-        file = open(folder_path+'pred_by_name.pkl','wb')
-        pkl.dump(results_pred, file)
-        file.close()
-        file = open(folder_path+'true_by_name.pkl','wb')
-        pkl.dump(results_lable, file)
-        file.close()
+                preds = np.concatenate((preds,pred_class.detach().cpu().numpy().reshape(-1)))
+                trues = np.concatenate((trues,label.detach().cpu().numpy().reshape(-1)))
+            # class_lable.append(label.detach().cpu().numpy().reshape(-1))
+            # class_pred.append(pred_class.detach().cpu().numpy().reshape(-1))
+        # trues = np.array(trues.cpu().numpy())
+        # preds = np.array(preds.cpu().numpy())
+        precision, recall, f1 = get_acc_p_r_f1(trues,preds )
+        print("precision, recall, f1:", precision, recall, f1)
+        print(get_acc(trues,preds))
+        print(classification_report(trues,preds))
 
         return
 
