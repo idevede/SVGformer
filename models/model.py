@@ -64,6 +64,12 @@ class Informer(nn.Module):
         # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias=True)
         self.projection = nn.Linear(d_model, c_out, bias=True)
         self.cls = nn.Linear(d_model, 3, bias=True) # 3 classes of the curve type
+
+        self.ln_f = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, 62, bias=False) # 62 is the fonts type 
+
+
+
         
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, 
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
@@ -72,22 +78,26 @@ class Informer(nn.Module):
         #self.pred_len = x_enc.shape[1]
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
-        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
+        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = True)
 
-        if retrival:
-            return enc_out, attns
+        return self.head(enc_out.reshape(enc_out.shape[0], enc_out.shape[2], enc_out.shape[1]))
 
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
-        dec_reg_out = self.projection(dec_out)
-        dec_cls_out = self.cls(dec_out)
+
+
+        # if retrival:
+        #     return enc_out, attns
+
+        # dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        # dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
+        # dec_reg_out = self.projection(dec_out)
+        # dec_cls_out = self.cls(dec_out)
         
-        # dec_out = self.end_conv1(dec_out)
-        # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
-        if self.output_attention:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
-        else:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out # [B, L, D]
+        # # dec_out = self.end_conv1(dec_out)
+        # # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
+        # if self.output_attention:
+        #     return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
+        # else:
+        #     return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out # [B, L, D]
     
     def forward_single(self, enc_out, x_dec, x_enc, x_mark_enc=None, x_mark_dec =None,
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):

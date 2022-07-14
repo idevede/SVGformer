@@ -49,12 +49,17 @@ class Dataset_Font(Dataset):
         F_data = open(path+'/data.pkl','rb')
         F_length = open(path+'/data_length.pkl','rb')
         F_label = open(path+'/data_label.pkl','rb')
+        F_name = open(path+'/data_name.pkl','rb')
         data_pkl = pkl.load(F_data)
         data_label = pkl.load(F_label)
+        data_name = pkl.load(F_name)
+
+        self.labels = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
         self.data = []
         # max_length = 0
         self.categories = []
+        self.name = []
         for i in range(len(data_pkl)):
             if len(data_pkl[i])>50:
                 continue
@@ -65,6 +70,7 @@ class Dataset_Font(Dataset):
             data_single = data_single.flatten()
             self.data.append(data_single)
             self.categories.append(data_label[i])
+            self.name.append(data_name[i])
             #self.categories.append(file[-5:-4])
             # if max_length < len(data):
             #     max_length = len(data)
@@ -134,7 +140,10 @@ class Dataset_Font(Dataset):
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask
+        name = self.name[idx]
+        index = self.labels.find(name[-1])
+
+        return layout['x'], layout['y'], layout['label'], mask, name, index
 
 class Dataset_Font_Val(Dataset):
     def __init__(self, root_path, flag='train', size=None, 
@@ -151,6 +160,9 @@ class Dataset_Font_Val(Dataset):
         data_pkl = pkl.load(F_data)
         data_label = pkl.load(F_label)
         data_name = pkl.load(F_name)
+
+        self.labels = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 
         self.data = []
         # max_length = 0
@@ -233,11 +245,12 @@ class Dataset_Font_Val(Dataset):
         layout = torch.tensor(self.data[idx], dtype=torch.float32)
         label = torch.tensor(self.categories[idx], dtype=torch.int32)
         name = self.name[idx]
+        index = self.labels.find(name[-1])
     
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask, name
+        return layout['x'], layout['y'], layout['label'], mask, name, index
 
 
 

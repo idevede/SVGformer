@@ -59,7 +59,7 @@ class Encoder(nn.Module):
         self.attn_layers = nn.ModuleList(attn_layers)
         self.conv_layers = nn.ModuleList(conv_layers) if conv_layers is not None else None
         self.norm = norm_layer
-        # self.linear = nn.Linear(25, 1)
+        self.linear =  nn.AdaptiveAvgPool1d(1) #nn.Linear(25, 1)
 
     def forward(self, x, attn_mask=None, reduce_hid =False):
         # x [B, L, D]
@@ -84,12 +84,16 @@ class Encoder(nn.Module):
 
         return x, attns
 
+
 class EncoderStack(nn.Module):
     def __init__(self, encoders, inp_lens):
         super(EncoderStack, self).__init__()
         self.encoders = nn.ModuleList(encoders)
         self.inp_lens = inp_lens
-        # self.linear = nn.Linear(25, 1)
+        self.linear = nn.AdaptiveAvgPool1d(1)
+        #Informer2020-font-deepsvg-format-averagepooling
+        #nn.Linear(25, 1)
+
 
     def forward(self, x, attn_mask=None, reduce_hid = False):
         # x [B, L, D]
@@ -101,5 +105,5 @@ class EncoderStack(nn.Module):
         x_stack = torch.cat(x_stack, -2)
         if reduce_hid:
             x_stack = self.linear(x_stack.reshape(x_stack[0], x_stack[2], x_stack[1]))
-            print(x_stack)
+            #print(x_stack)
         return x_stack, attns

@@ -215,14 +215,15 @@ class Exp_Informer(Exp_Basic):
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
-        for i, (batch_x,batch_y,cls_label,mask) in enumerate(vali_loader):
+        for i, (batch_x,batch_y,cls_label,mask, name,label) in enumerate(vali_loader):
             #print(i)
             cls_label = cls_label.float().to(self.device)
             mask = mask.float().to(self.device)
-            pred, true, pred_cls, _, _ = self._process_one_batch(
-                vali_data, batch_x, batch_y, cls_label, mask)
-            #loss = loss_2_type(true, pred, pred_cls, cls_label, mask)
-            loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])
+            pred = self._process_one_batch(
+                    train_data, batch_x, batch_y, cls_label, mask, )
+
+            loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
+
             #loss = criterion(pred.detach().cpu(), true.detach().cpu())
             total_loss.append(loss.detach().cpu().numpy())
         total_loss = np.average(total_loss)
@@ -262,15 +263,19 @@ class Exp_Informer(Exp_Basic):
             
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x,batch_y,cls_label,mask) in enumerate(train_loader):
+            for i, (batch_x,batch_y,cls_label,mask, name,label) in enumerate(train_loader):
                 iter_count += 1
                 cls_label = cls_label.to(self.device)
                 mask = mask.float().to(self.device)
+                label = torch.tensor(label).long().to(self.device)
                 
                 model_optim.zero_grad()
-                pred, true, pred_cls, enc_out, dec_inp = self._process_one_batch(
-                    train_data, batch_x, batch_y, cls_label, mask)
-                loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])#criterion(pred, true)
+                pred = self._process_one_batch(
+                    train_data, batch_x, batch_y, cls_label, mask, )
+
+                loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
+
+                #loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])#criterion(pred, true)
                 
                 # probs = F.softmax(pred_cls, dim=-1)
                 # _, pred_class = torch.topk(probs, k=1, dim=-1)
@@ -306,9 +311,9 @@ class Exp_Informer(Exp_Basic):
             #self.model.load_state_dict(torch.load(model_path))
             early_stopping(vali_loss, self.model, path)
 
-            if early_stopping.early_stop:
-                print("Early stopping")
-                break
+            # if early_stopping.early_stop:
+            #     print("Early stopping")
+            #     break
 
             adjust_learning_rate(model_optim, epoch+1, self.args)
             
@@ -343,7 +348,7 @@ class Exp_Informer(Exp_Basic):
         results_lable = {}
 
         
-        for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
+        for i, (batch_x,batch_y,cls_label,mask,name, label) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
             mask = mask.float().to(self.device)
             pred, true, pred_cls, _, _ = self._process_one_batch(
@@ -758,27 +763,16 @@ class Exp_Informer(Exp_Basic):
         elif self.args.padding==1:
             dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
         dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
-        # encoder - decoder
-        if self.args.use_amp:
-            with torch.cuda.amp.autocast():
-                if self.args.output_attention:
-                    outputs = self.model(batch_x, cls_label, dec_inp, mask)[0]
-                else:
-                    outputs = self.model(batch_x, cls_label, dec_inp, mask)
-        else:
-            if self.args.output_attention:
-                outputs, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask)
-                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
-            else:
-                outputs, outputs_cls, enc_out = self.model(batch_x, cls_label, dec_inp, mask)
-        if self.args.inverse:
-            outputs = dataset_object.inverse_transform(outputs) # here we need the ori dataset object -- by defu
-        f_dim = -1 if self.args.features=='MS' else 0
-        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
-        batch_y = batch_y.to(self.device)
+        
+        outputs = self.model(batch_x, cls_label, dec_inp, mask)
+        # if self.args.inverse:
+        #     outputs = dataset_object.inverse_transform(outputs) # here we need the ori dataset object -- by defu
+        # f_dim = -1 if self.args.features=='MS' else 0
+        # #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
+        # batch_y = batch_y.to(self.device)
 
 
-        return outputs, batch_y, outputs_cls, enc_out, dec_inp
+        return outputs #, batch_y, outputs_cls, enc_out, dec_inp
 
     def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
         batch_x = batch_x.float().to(self.device)
