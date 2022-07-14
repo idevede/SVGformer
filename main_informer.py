@@ -11,7 +11,7 @@ parser.add_argument('--model', type=str, default='informer',help='model of exper
 parser.add_argument('--data', type=str,  default='Fonts', help='data')
 parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
 # Font options 
-parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/train/json")
+parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train_name", help="/path/to/train/json")
 parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
 #parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_deepsvg_font/fonts/val_deepsvg.pkl", help="/path/to/val/json")
 
