@@ -49,42 +49,39 @@ class Dataset_Font(Dataset):
         F_data = open(path+'/data.pkl','rb')
         F_length = open(path+'/data_length.pkl','rb')
         F_label = open(path+'/data_label.pkl','rb')
+        F_name = open(path+'/data_name.pkl','rb')
+        F_curve = open(path+'/train_curve_dic.pkl', 'rb')
         data_pkl = pkl.load(F_data)
         data_label = pkl.load(F_label)
-
+        data_name = pkl.load(F_name)
+        data_curve = pkl.load(F_curve)
+        
         self.data = []
         # max_length = 0
         self.categories = []
+        self.name = []
+        self.curve = []
+
         for i in range(len(data_pkl)):
             if len(data_pkl[i])>50:
                 continue
             #data_single = np.load(path+'/'+file)
             data_single = data_pkl[i]
+            if len(data_curve[data_name[i]])!= len(data_single):
+                continue
             # data_single[data_copy == 0 ] = 0
             # data_single[data_copy == 1 ] = 1
             data_single = data_single.flatten()
             self.data.append(data_single)
             self.categories.append(data_label[i])
-            #self.categories.append(file[-5:-4])
-            # if max_length < len(data):
-            #     max_length = len(data)
+            self.name.append(data_name[i])
+            queu = np.ones(50)*(-1) 
+            d_c = np.array(data_curve[data_name[i]])
+            queu[:len(d_c)] = d_c
+            self.curve.append(queu)
 
-
-
-        # images, annotations, categories = data['images'], data['annotations'], data['categories']
-        # self.size = pow(2, precision)
-
-        # self.categories = {c["id"]: c for c in categories}
-        # self.colors = gen_colors(len(self.categories))
-
-        # self.json_category_id_to_contiguous_id = {
-        #     v: i + self.size for i, v in enumerate([c["id"] for c in self.categories.values()])
-        # }
-
-        # self.contiguous_category_id_to_json_id = {
-        #     v: k for k, v in self.json_category_id_to_contiguous_id.items()
-        # }
-
+            
+            
         #self.vocab_size = self.size + len(self.categories) + 3  # bos, eos, pad tokens
         self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 
         self.bos_token = self.vocab_size - 3
@@ -130,11 +127,12 @@ class Dataset_Font(Dataset):
         # grab a chunk of (block_size + 1) tokens from the data
         layout = torch.tensor(self.data[idx], dtype=torch.float32)
         label = torch.tensor(self.categories[idx], dtype=torch.int32)
+        curve = torch.tensor(self.curve[idx], dtype=torch.int32)
     
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask
+        return layout['x'], layout['y'], layout['label'], mask, curve
 
 class Dataset_Font_Val(Dataset):
     def __init__(self, root_path, flag='train', size=None, 
@@ -148,46 +146,36 @@ class Dataset_Font_Val(Dataset):
         F_length = open(path+'/data_length.pkl','rb')
         F_label = open(path+'/data_label.pkl','rb')
         F_name = open(path+'/data_name.pkl','rb')
+        F_curve = open(path+'/train_curve_dic.pkl', 'rb')
         data_pkl = pkl.load(F_data)
         data_label = pkl.load(F_label)
         data_name = pkl.load(F_name)
+        data_curve = pkl.load(F_curve)
 
         self.data = []
         # max_length = 0
         self.categories = []
         self.name = []
+        self.curve = []
         for i in range(len(data_pkl)):
             if len(data_pkl[i])>50:
                 continue
+            
             #data_single = np.load(path+'/'+file)
             data_single = data_pkl[i]
+            if len(data_curve[data_name[i]])!= len(data_single):
+                continue
             # data_single[data_copy == 0 ] = 0
             # data_single[data_copy == 1 ] = 1
             data_single = data_single.flatten()
             self.data.append(data_single)
             self.categories.append(data_label[i])
             self.name.append(data_name[i])
-            #self.categories.append(file[-5:-4])
-            # if max_length < len(data):
-            #     max_length = len(data)
-
-
-
-        # images, annotations, categories = data['images'], data['annotations'], data['categories']
-        # self.size = pow(2, precision)
-
-        # self.categories = {c["id"]: c for c in categories}
-        # self.colors = gen_colors(len(self.categories))
-
-        # self.json_category_id_to_contiguous_id = {
-        #     v: i + self.size for i, v in enumerate([c["id"] for c in self.categories.values()])
-        # }
-
-        # self.contiguous_category_id_to_json_id = {
-        #     v: k for k, v in self.json_category_id_to_contiguous_id.items()
-        # }
-
-        #self.vocab_size = self.size + len(self.categories) + 3  # bos, eos, pad tokens
+            queu = np.ones(50)*(-1) 
+            d_c = np.array(data_curve[data_name[i]])
+            queu[:len(d_c)] = d_c
+            self.curve.append(queu)
+            
         self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 
         self.bos_token = self.vocab_size - 3
         self.eos_token = self.vocab_size - 2
@@ -232,12 +220,13 @@ class Dataset_Font_Val(Dataset):
         # grab a chunk of (block_size + 1) tokens from the data
         layout = torch.tensor(self.data[idx], dtype=torch.float32)
         label = torch.tensor(self.categories[idx], dtype=torch.int32)
+        curve = torch.tensor(self.curve[idx], dtype=torch.int32)
         name = self.name[idx]
     
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask, name
+        return layout['x'], layout['y'], layout['label'], mask, name, curve
 
 
 

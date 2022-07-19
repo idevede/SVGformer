@@ -11,8 +11,11 @@ parser.add_argument('--model', type=str, default='informer',help='model of exper
 parser.add_argument('--data', type=str,  default='Fonts', help='data')
 parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
 # Font options 
-parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train", help="/path/to/train/json")
-parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
+# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train", help="/path/to/train/json")
+# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
+parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Train", help="/path/to/train/json")
+parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Val", help="/path/to/val/json")
+
 #parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_deepsvg_font/fonts/val_deepsvg.pkl", help="/path/to/val/json")
 
 # parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/Train/npy", help="/path/to/train/json")
@@ -114,14 +117,14 @@ for ii in range(args.itr):
                 args.embed, args.distil, args.mix, args.des, ii)
 
     exp = Exp(args) # set experiments
-    print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    exp.train(setting)
+    # print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
+    # exp.train(setting)
     
     # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     # exp.test_with_rev(setting, True, ii)
 
-    # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    # exp.test(setting, True, ii)
+    print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    exp.test(setting, True, ii)
 
     # print('>>>>>>>retrieval : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     # exp.retrieval(setting, True, ii)

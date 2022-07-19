@@ -215,12 +215,13 @@ class Exp_Informer(Exp_Basic):
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
-        for i, (batch_x,batch_y,cls_label,mask) in enumerate(vali_loader):
+        for i, (batch_x,batch_y,cls_label,mask, curve) in enumerate(vali_loader):
             #print(i)
             cls_label = cls_label.float().to(self.device)
             mask = mask.float().to(self.device)
+            curve = curve.to(self.device)
             pred, true, pred_cls, _, _ = self._process_one_batch(
-                vali_data, batch_x, batch_y, cls_label, mask)
+                vali_data, batch_x, batch_y, cls_label, mask, curve)
             #loss = loss_2_type(true, pred, pred_cls, cls_label, mask)
             loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])
             #loss = criterion(pred.detach().cpu(), true.detach().cpu())
@@ -262,14 +263,15 @@ class Exp_Informer(Exp_Basic):
             
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x,batch_y,cls_label,mask) in enumerate(train_loader):
+            for i, (batch_x,batch_y,cls_label,mask, curve) in enumerate(train_loader):
                 iter_count += 1
                 cls_label = cls_label.to(self.device)
                 mask = mask.float().to(self.device)
+                curve = curve.to(self.device)
                 
                 model_optim.zero_grad()
                 pred, true, pred_cls, enc_out, dec_inp = self._process_one_batch(
-                    train_data, batch_x, batch_y, cls_label, mask)
+                    train_data, batch_x, batch_y, cls_label, mask, curve)
                 loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])#criterion(pred, true)
                 
                 # probs = F.softmax(pred_cls, dim=-1)
@@ -343,11 +345,12 @@ class Exp_Informer(Exp_Basic):
         results_lable = {}
 
         
-        for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
+        for i, (batch_x,batch_y,cls_label,mask,name, curve) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
             mask = mask.float().to(self.device)
+            curve = curve.to(self.device)
             pred, true, pred_cls, _, _ = self._process_one_batch(
-                test_data, batch_x, batch_y, cls_label, mask)
+                test_data, batch_x, batch_y, cls_label, mask, curve)
             #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
 
             
@@ -745,7 +748,7 @@ class Exp_Informer(Exp_Basic):
         
         return
 
-    def _process_one_batch(self, dataset_object, batch_x, batch_y, cls_label, mask):
+    def _process_one_batch(self, dataset_object, batch_x, batch_y, cls_label, mask, curve):
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float()
 
@@ -755,9 +758,12 @@ class Exp_Informer(Exp_Basic):
         # decoder input
         if self.args.padding==0:
             dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
+            dec_curve_inp = torch.zeros([curve.shape[0], curve.shape[1]-1]).to(self.device)
+
         elif self.args.padding==1:
             dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
         dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
+        dec_curve_inp = torch.cat([curve[:,:1],dec_curve_inp ], dim=1).to(self.device)
         # encoder - decoder
         if self.args.use_amp:
             with torch.cuda.amp.autocast():
@@ -770,7 +776,7 @@ class Exp_Informer(Exp_Basic):
                 outputs, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask)
                 #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
             else:
-                outputs, outputs_cls, enc_out = self.model(batch_x, cls_label, dec_inp, mask)
+                outputs, outputs_cls, enc_out = self.model(batch_x, cls_label, dec_inp, mask, curve, dec_curve_inp)
         if self.args.inverse:
             outputs = dataset_object.inverse_transform(outputs) # here we need the ori dataset object -- by defu
         f_dim = -1 if self.args.features=='MS' else 0

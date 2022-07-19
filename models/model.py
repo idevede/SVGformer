@@ -65,19 +65,19 @@ class Informer(nn.Module):
         self.projection = nn.Linear(d_model, c_out, bias=True)
         self.cls = nn.Linear(d_model, 3, bias=True) # 3 classes of the curve type
         
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, 
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, curve, dec_curve_inp,
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
 
         self.pred_len = x_enc.shape[1]-1
         #self.pred_len = x_enc.shape[1]
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out = self.enc_embedding(x_enc, x_mark_enc, curve)
         # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
         enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
 
         if retrival:
             return enc_out, attns
 
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.dec_embedding(x_dec, x_mark_dec, dec_curve_inp)
         dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
         dec_reg_out = self.projection(dec_out)
         dec_cls_out = self.cls(dec_out)
