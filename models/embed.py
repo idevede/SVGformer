@@ -34,12 +34,26 @@ class TokenEmbedding(nn.Module):
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight,mode='fan_in',nonlinearity='leaky_relu')
         
+        self.linear =  nn.AdaptiveAvgPool1d(60) # max_length =60
+        
 
     def forward(self, x):
         # x = self.tokenConv(x.permute(0, 2, 1))
         # x = self.max_pooling(x).transpose(1,2)
-        x = self.tokenConv(x.permute(0, 2, 1)).transpose(1,2)
+        in_height = x.shape[1]
+        if (in_height % 1 == 0):
+            pad_along_height = 2 #max(kernel_size[0] - strides[0], 0)
+        else:
+            pad_along_height = max(
+                3 - (in_height % 1), 0)
+        pad_top = pad_along_height // 2
+        pad_bottom = pad_along_height - pad_top
+        data_top = nn.ZeroPad2d((0,0,-pad_top, 0))(x.unsqueeze(1)).squeeze()
+        data_bottom = nn.ZeroPad2d((0,0,-pad_bottom, 0))(x.unsqueeze(1)).squeeze()
+        x = torch.cat((data_top,x,data_bottom), dim=1)
+        x = self.tokenConv(x.permute(0, 2, 1))
         #x = self.max_pooling(x).transpose(1,2)
+        x = self.linear(x).transpose(1,2)
         return x
 
 class FixedEmbedding(nn.Module):

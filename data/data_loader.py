@@ -63,7 +63,7 @@ class Dataset_Font(Dataset):
         self.curve = []
 
         for i in range(len(data_pkl)):
-            if len(data_pkl[i])>50:
+            if len(data_pkl[i])>60:
                 continue
             #data_single = np.load(path+'/'+file)
             data_single = data_pkl[i]
@@ -75,9 +75,26 @@ class Dataset_Font(Dataset):
             self.data.append(data_single)
             self.categories.append(data_label[i])
             self.name.append(data_name[i])
-            queu = np.ones(50)*(-1) 
+            queu = np.ones(60)*(-1) 
             d_c = np.array(data_curve[data_name[i]])
-            queu[:len(d_c)] = d_c
+            
+            
+            dict_temp = {}
+            for i in range(len(d_c)):
+                if d_c[i] not in dict_temp:
+                    dict_temp[d_c[i]] = []
+                dict_temp[d_c[i]].append(i)
+
+            key_value = list(dict_temp.keys())  
+            key_value.sort()
+            i = 0
+            for key in key_value:
+                for data in dict_temp[key]:
+                   queu[data] = i
+                i += 1 
+
+
+            #queu[:len(d_c)] = d_c
             self.curve.append(queu)
 
             
@@ -92,7 +109,7 @@ class Dataset_Font(Dataset):
 
         self.max_length = max_length
         if self.max_length is None:
-            self.max_length = 50
+            self.max_length = 60
             '''
             json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
             files= os.listdir(json_path)
@@ -158,7 +175,7 @@ class Dataset_Font_Val(Dataset):
         self.name = []
         self.curve = []
         for i in range(len(data_pkl)):
-            if len(data_pkl[i])>50:
+            if len(data_pkl[i])>60:
                 continue
             
             #data_single = np.load(path+'/'+file)
@@ -171,9 +188,24 @@ class Dataset_Font_Val(Dataset):
             self.data.append(data_single)
             self.categories.append(data_label[i])
             self.name.append(data_name[i])
-            queu = np.ones(50)*(-1) 
+            queu = np.ones(60)*(-1) 
             d_c = np.array(data_curve[data_name[i]])
-            queu[:len(d_c)] = d_c
+
+            dict_temp = {}
+            for i in range(len(d_c)):
+                if d_c[i] not in dict_temp:
+                    dict_temp[d_c[i]] = []
+                dict_temp[d_c[i]].append(i)
+
+            key_value = list(dict_temp.keys())  
+            key_value.sort()
+            i = 0
+            for key in key_value:
+                for data in dict_temp[key]:
+                   queu[data] = i
+                i += 1 
+                
+            #queu[:len(d_c)] = d_c
             self.curve.append(queu)
             
         self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 
@@ -185,7 +217,7 @@ class Dataset_Font_Val(Dataset):
 
         self.max_length = max_length
         if self.max_length is None:
-            self.max_length = 50
+            self.max_length = 60
             '''
             json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
             files= os.listdir(json_path)
