@@ -1,4 +1,4 @@
-from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Font_Val, Dataset_Pred, Dataset_Font
+from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_Font # , Dataset_Font_Val
 from exp.exp_basic import Exp_Basic
 from models.model import Informer, InformerStack
 
@@ -95,7 +95,8 @@ class Exp_Informer(Exp_Basic):
             'Solar':Dataset_Custom,
             'custom':Dataset_Custom,
             'Fonts': Dataset_Font,
-            'Fonts_Val': Dataset_Font_Val,
+            #'Fonts_Val': Dataset_Font_Val,
+            'Fonts_Val': Dataset_Font,
         }
         Data = data_dict[self.args.data]
         timeenc = 0 if args.embed!='timeF' else 1
@@ -758,11 +759,15 @@ class Exp_Informer(Exp_Basic):
         # decoder input
         if self.args.padding==0:
             dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
+            #dec_curve_inp = torch.zeros([curve.shape[0], curve.shape[1]-1, curve.shape[2]]).to(self.device)
             dec_curve_inp = torch.zeros([curve.shape[0], curve.shape[1]-1]).to(self.device)
+            
 
         elif self.args.padding==1:
             dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
         dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
+        #dec_curve_inp = torch.cat([curve[:,:1,:],dec_curve_inp ], dim=1).to(self.device)
+        dec_curve_inp = (46*torch.ones([curve.shape[0], curve.shape[1]-1])).to(self.device)
         dec_curve_inp = torch.cat([curve[:,:1],dec_curve_inp ], dim=1).to(self.device)
         # encoder - decoder
         if self.args.use_amp:

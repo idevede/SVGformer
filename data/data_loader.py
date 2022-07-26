@@ -51,16 +51,20 @@ class Dataset_Font(Dataset):
         F_label = open(path+'/data_label.pkl','rb')
         F_name = open(path+'/data_name.pkl','rb')
         F_curve = open(path+'/train_curve_dic.pkl', 'rb')
+        F_curve_mat = open(path+'/train_curve_mat.pkl', 'rb')
+        data_curve_mat = pkl.load(F_curve_mat)
         data_pkl = pkl.load(F_data)
         data_label = pkl.load(F_label)
         data_name = pkl.load(F_name)
         data_curve = pkl.load(F_curve)
         
         self.data = []
+        self.label_length = 46
         # max_length = 0
         self.categories = []
         self.name = []
         self.curve = []
+        self.curve_matrix = []
 
         for i in range(len(data_pkl)):
             if len(data_pkl[i])>60:
@@ -75,7 +79,8 @@ class Dataset_Font(Dataset):
             self.data.append(data_single)
             self.categories.append(data_label[i])
             self.name.append(data_name[i])
-            queu = np.ones(60)*(-1) 
+            self.curve_matrix.append(data_curve_mat[data_name[i]][:60,:60])
+            queu = np.ones(60)*self.label_length
             d_c = np.array(data_curve[data_name[i]])
             
             
@@ -92,10 +97,21 @@ class Dataset_Font(Dataset):
                 for data in dict_temp[key]:
                    queu[data] = i
                 i += 1 
-
-
-            #queu[:len(d_c)] = d_c
             self.curve.append(queu)
+
+
+            # queu_2d = np.zeros((60,60))
+            # for i in range(len(d_c)):
+            #     for j in range(len(d_c)):
+            #         if d_c[i] ==d_c[j]:
+            #            queu_2d[i][j] = 1 
+            # self.curve_matrix.append(queu_2d)
+
+
+            # #queu[:len(d_c)] = d_c
+            # self.curve.append(queu)
+            if i>1000:
+                break
 
             
             
@@ -145,120 +161,137 @@ class Dataset_Font(Dataset):
         layout = torch.tensor(self.data[idx], dtype=torch.float32)
         label = torch.tensor(self.categories[idx], dtype=torch.int32)
         curve = torch.tensor(self.curve[idx], dtype=torch.int32)
+        #curve = torch.tensor(self.curve_matrix[idx], dtype=torch.int32)
     
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
         return layout['x'], layout['y'], layout['label'], mask, curve
 
-class Dataset_Font_Val(Dataset):
-    def __init__(self, root_path, flag='train', size=None, 
-                 features='S', data_path='ETTh1.csv', 
-                 target='OT', scale=True, inverse=False, timeenc=0, freq='h', cols=None, max_length=None):
+# class Dataset_Font_Val(Dataset):
+#     def __init__(self, root_path, flag='train', size=None, 
+#                  features='S', data_path='ETTh1.csv', 
+#                  target='OT', scale=True, inverse=False, timeenc=0, freq='h', cols=None, max_length=None):
     
 
-        path = root_path #"/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy"
-        #files= os.listdir(root_path)
-        F_data = open(path+'/data.pkl','rb')
-        F_length = open(path+'/data_length.pkl','rb')
-        F_label = open(path+'/data_label.pkl','rb')
-        F_name = open(path+'/data_name.pkl','rb')
-        F_curve = open(path+'/train_curve_dic.pkl', 'rb')
-        data_pkl = pkl.load(F_data)
-        data_label = pkl.load(F_label)
-        data_name = pkl.load(F_name)
-        data_curve = pkl.load(F_curve)
+#         path = root_path #"/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy"
+#         #files= os.listdir(root_path)
+#         F_data = open(path+'/data.pkl','rb')
+#         F_length = open(path+'/data_length.pkl','rb')
+#         F_label = open(path+'/data_label.pkl','rb')
+#         F_name = open(path+'/data_name.pkl','rb')
+#         F_curve = open(path+'/train_curve_dic.pkl', 'rb')
+#         data_pkl = pkl.load(F_data)
+#         data_label = pkl.load(F_label)
+#         data_name = pkl.load(F_name)
+#         data_curve = pkl.load(F_curve)
+       
+#         F_curve_mat = open(path+'/train_curve_mat.pkl', 'rb')
+#         data_curve_mat = pkl.load(F_curve_mat)
+#         self.label_length = 46
 
-        self.data = []
-        # max_length = 0
-        self.categories = []
-        self.name = []
-        self.curve = []
-        for i in range(len(data_pkl)):
-            if len(data_pkl[i])>60:
-                continue
+#         self.data = []
+#         # max_length = 0
+#         self.categories = []
+#         self.name = []
+#         self.curve = []
+#         self.curve_matrix = []
+#         for i in range(len(data_pkl)):
+#             if len(data_pkl[i])>60:
+#                 continue
             
-            #data_single = np.load(path+'/'+file)
-            data_single = data_pkl[i]
-            if len(data_curve[data_name[i]])!= len(data_single):
-                continue
-            # data_single[data_copy == 0 ] = 0
-            # data_single[data_copy == 1 ] = 1
-            data_single = data_single.flatten()
-            self.data.append(data_single)
-            self.categories.append(data_label[i])
-            self.name.append(data_name[i])
-            queu = np.ones(60)*(-1) 
-            d_c = np.array(data_curve[data_name[i]])
+#             #data_single = np.load(path+'/'+file)
+#             data_single = data_pkl[i]
+#             if len(data_curve[data_name[i]])!= len(data_single):
+#                 continue
+#             # data_single[data_copy == 0 ] = 0
+#             # data_single[data_copy == 1 ] = 1
+#             data_single = data_single.flatten()
+#             self.data.append(data_single)
+#             self.categories.append(data_label[i])
+#             self.name.append(data_name[i])
+#             self.curve_matrix.append(data_curve_mat[data_name[i]][:60,:60])
+#             # if i>1000:
+#             #     break
+#             queu = np.ones(60)*self.label_length
+#             d_c = np.array(data_curve[data_name[i]])
+#             # queu_2d = np.zeros((60,60))
+#             # for i in range(len(d_c)):
+#             #     for j in range(len(d_c)):
+#             #         if d_c[i] ==d_c[j]:
+#             #            queu_2d[i][j] = 1 
+#             # self.curve_matrix.append(queu_2d)
 
-            dict_temp = {}
-            for i in range(len(d_c)):
-                if d_c[i] not in dict_temp:
-                    dict_temp[d_c[i]] = []
-                dict_temp[d_c[i]].append(i)
+#             dict_temp = {}
+#             for i in range(len(d_c)):
+#                 if d_c[i] not in dict_temp:
+#                     dict_temp[d_c[i]] = []
+#                 dict_temp[d_c[i]].append(i)
 
-            key_value = list(dict_temp.keys())  
-            key_value.sort()
-            i = 0
-            for key in key_value:
-                for data in dict_temp[key]:
-                   queu[data] = i
-                i += 1 
+
+#             key_value = list(dict_temp.keys())  
+#             key_value.sort()
+#             i = 0
+#             for key in key_value:
+#                 for data in dict_temp[key]:
+#                    queu[data] = i
+#                 i += 1 
                 
-            #queu[:len(d_c)] = d_c
-            self.curve.append(queu)
+#             #queu[:len(d_c)] = d_c
+#             self.curve.append(queu)
             
-        self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 
-        self.bos_token = self.vocab_size - 3
-        self.eos_token = self.vocab_size - 2
-        self.pad_token = self.vocab_size - 1
+#         self.vocab_size = 46 + 1  # 10 + 26 + 26 bos, eos, pad tokens 
+#         self.bos_token = self.vocab_size - 3
+#         self.eos_token = self.vocab_size - 2
+#         self.pad_token = self.vocab_size - 1
 
     
 
-        self.max_length = max_length
-        if self.max_length is None:
-            self.max_length = 60
-            '''
-            json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
-            files= os.listdir(json_path)
-            data_all = []
-            # max_length = 0
-            self.max_length = 0
-            for file in files:
-                data_single = np.load(json_path+'/'+file)
-                mx = data_single.shape[0]
-                if mx>self.max_length:
-                    self.max_length = mx
-            '''
+#         self.max_length = max_length
+#         if self.max_length is None:
+#             self.max_length = 60
+#             '''
+#             json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
+#             files= os.listdir(json_path)
+#             data_all = []
+#             # max_length = 0
+#             self.max_length = 0
+#             for file in files:
+#                 data_single = np.load(json_path+'/'+file)
+#                 mx = data_single.shape[0]
+#                 if mx>self.max_length:
+#                     self.max_length = mx
+#             '''
             
-            self.max_length = int(self.max_length)
-        self.transform = Padding_Font(self.max_length*8, self.vocab_size)
+#             self.max_length = int(self.max_length)
+#         self.transform = Padding_Font(self.max_length*8, self.vocab_size)
         
 
 
-    def __len__(self):
-        return len(self.data)
+#     def __len__(self):
+#         return len(self.data)
 
-    def render(self, layout):
+#     def render(self, layout):
         
-        layout = layout.reshape(-1)
-        layout = layout[: len(layout) // 8 * 8].reshape(-1, 8)
-        return layout
+#         layout = layout.reshape(-1)
+#         layout = layout[: len(layout) // 8 * 8].reshape(-1, 8)
+#         return layout
     
-    def inverse_transform(self, data):
-        return data
+#     def inverse_transform(self, data):
+#         return data
 
-    def __getitem__(self, idx):
-        # grab a chunk of (block_size + 1) tokens from the data
-        layout = torch.tensor(self.data[idx], dtype=torch.float32)
-        label = torch.tensor(self.categories[idx], dtype=torch.int32)
-        curve = torch.tensor(self.curve[idx], dtype=torch.int32)
-        name = self.name[idx]
+#     def __getitem__(self, idx):
+#         # grab a chunk of (block_size + 1) tokens from the data
+#         layout = torch.tensor(self.data[idx], dtype=torch.float32)
+#         label = torch.tensor(self.categories[idx], dtype=torch.int32)
+#         curve = torch.tensor(self.curve[idx], dtype=torch.int32)
+#         #curve = torch.tensor(self.curve_matrix[idx], dtype=torch.int32)
+#         name = self.name[idx]
     
-        length = torch.tensor(len(layout)/8, dtype=torch.int32)
-        layout = self.transform(layout, label)
-        mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask, name, curve
+#         length = torch.tensor(len(layout)/8, dtype=torch.int32)
+#         layout = self.transform(layout, label)
+#         mask = (layout['x']!=-1).float()
+#         return layout['x'], layout['y'], layout['label'], mask, name, curve
 
 
 

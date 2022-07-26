@@ -66,7 +66,7 @@ class Encoder(nn.Module):
         attns = []
         if self.conv_layers is not None:
             for attn_layer, conv_layer in zip(self.attn_layers, self.conv_layers):
-                x, attn = attn_layer(x, attn_mask=attn_mask)
+                x, attn = attn_layer(x, attn_mask=attn_mask) # 32, 60, 512
                 x = conv_layer(x)
                 attns.append(attn)
             x, attn = self.attn_layers[-1](x, attn_mask=attn_mask)

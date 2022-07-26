@@ -38,22 +38,57 @@ class TokenEmbedding(nn.Module):
         
 
     def forward(self, x):
+        x = self.tokenConv(x.permute(0, 2, 1))
+        x = x.transpose(1,2)
+        #x = self.linear(x).transpose(1,2)
+        #x = self.max_pooling(x).transpose(1,2)
+        # in_height = x.shape[1]
+        # if (in_height % 1 == 0):
+        #     pad_along_height = 2 #max(kernel_size[0] - strides[0], 0)
+        # else:
+        #     pad_along_height = max(
+        #         3 - (in_height % 1), 0)
+        # pad_top = pad_along_height // 2
+        # pad_bottom = pad_along_height - pad_top
+        # data_top = nn.ZeroPad2d((0,0,-pad_top, 0))(x.unsqueeze(1)).squeeze()
+        # data_bottom = nn.ZeroPad2d((0,0,-pad_bottom, 0))(x.unsqueeze(1)).squeeze()
+        # x = torch.cat((data_top,x,data_bottom), dim=1)
+        # x = self.tokenConv(x.permute(0, 2, 1))
+        # #x = self.max_pooling(x).transpose(1,2)
+        # x = self.linear(x).transpose(1,2)
+        return x
+
+class CurveEmbedding(nn.Module):
+    def __init__(self, c_in, d_model):
+        super(CurveEmbedding, self).__init__()
+        padding = 1 if torch.__version__>='1.5.0' else 2
+        self.tokenConv = nn.Conv1d(in_channels=c_in, out_channels=d_model, 
+                                    kernel_size=3, padding=padding, padding_mode='circular')
+        self.max_pooling = nn.MaxPool1d(3, stride=1, padding=1, dilation = 1) # stride = 1
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight,mode='fan_in',nonlinearity='leaky_relu')
+        
+        #self.linear =  nn.AdaptiveAvgPool1d(60) # max_length =60
+        
+
+    def forward(self, x):
         # x = self.tokenConv(x.permute(0, 2, 1))
         # x = self.max_pooling(x).transpose(1,2)
-        in_height = x.shape[1]
-        if (in_height % 1 == 0):
-            pad_along_height = 2 #max(kernel_size[0] - strides[0], 0)
-        else:
-            pad_along_height = max(
-                3 - (in_height % 1), 0)
-        pad_top = pad_along_height // 2
-        pad_bottom = pad_along_height - pad_top
-        data_top = nn.ZeroPad2d((0,0,-pad_top, 0))(x.unsqueeze(1)).squeeze()
-        data_bottom = nn.ZeroPad2d((0,0,-pad_bottom, 0))(x.unsqueeze(1)).squeeze()
-        x = torch.cat((data_top,x,data_bottom), dim=1)
-        x = self.tokenConv(x.permute(0, 2, 1))
+        # in_height = x.shape[1]
+        # if (in_height % 1 == 0):
+        #     pad_along_height = 2 #max(kernel_size[0] - strides[0], 0)
+        # else:
+        #     pad_along_height = max(
+        #         3 - (in_height % 1), 0)
+        # pad_top = pad_along_height // 2
+        # pad_bottom = pad_along_height - pad_top
+        # data_top = nn.ZeroPad2d((0,0,-pad_top, 0))(x.unsqueeze(1)).squeeze()
+        # data_bottom = nn.ZeroPad2d((0,0,-pad_bottom, 0))(x.unsqueeze(1)).squeeze()
+        # x = torch.cat((data_top,x,data_bottom), dim=1)
+        x = self.tokenConv(x).transpose(1,2)
         #x = self.max_pooling(x).transpose(1,2)
-        x = self.linear(x).transpose(1,2)
+        #x = self.linear(x).transpose(1,2)
         return x
 
 class FixedEmbedding(nn.Module):
@@ -116,17 +151,21 @@ class DataEmbedding(nn.Module):
     def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
         super(DataEmbedding, self).__init__()
 
-        self.value_embedding = TokenEmbedding(c_in=c_in+1, d_model=d_model)
+        #self.value_embedding = TokenEmbedding(c_in=c_in + 1, d_model=d_model)
+        self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
+        self.curve_embedding = CurveEmbedding(c_in=60, d_model=d_model) # 60 is the max length
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type, freq=freq) if embed_type!='timeF' else TimeFeatureEmbedding(d_model=d_model, embed_type=embed_type, freq=freq)
-
+        self.tok_emb = nn.Embedding(47, d_model)
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, x_mark=None, curve=None):
-        #x = self.value_embedding(x) + self.position_embedding(x) + self.temporal_embedding(x_mark)
-        curve = curve.unsqueeze(-1)
-        x = torch.cat([x,curve],2)
-        x = self.value_embedding(x) + self.position_embedding(x) #+ self.temporal_embedding(x_mark)
+       
+        #curve = curve.unsqueeze(-1)
+        #x = torch.cat([x,curve],2)
+        #curve = 
+        #x = self.value_embedding(x) + self.position_embedding(x) + self.curve_embedding(curve.to(torch.float)) #+ self.temporal_embedding(x_mark)
+        x = self.value_embedding(x) + self.position_embedding(x) + self.tok_emb(curve.long()) #+ self.curve_embedding(curve.to(torch.float)) #+ self.temporal_embedding(x_mark)
         
         return self.dropout(x)
 

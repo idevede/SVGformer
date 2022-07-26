@@ -85,7 +85,7 @@ class ProbAttention(nn.Module):
             attn_mask = ProbMask(B, H, L_Q, index, scores, device=V.device)
             scores.masked_fill_(attn_mask.mask, -np.inf)
 
-        attn = torch.softmax(scores, dim=-1) # nn.Softmax(dim=-1)(scores)
+        attn = torch.softmax(scores, dim=-1) # nn.Softmax(dim=-1)(scores) # here need to add attention, 在这里添加attention
 
         context_in[torch.arange(B)[:, None, None],
                    torch.arange(H)[None, :, None],
@@ -101,7 +101,7 @@ class ProbAttention(nn.Module):
         B, L_Q, H, D = queries.shape
         _, L_K, _, _ = keys.shape
 
-        queries = queries.transpose(2,1)
+        queries = queries.transpose(2,1) # 32,8,60,64
         keys = keys.transpose(2,1)
         values = values.transpose(2,1)
 
@@ -111,7 +111,7 @@ class ProbAttention(nn.Module):
         U_part = U_part if U_part<L_K else L_K
         u = u if u<L_Q else L_Q
         
-        scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) 
+        scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) # 32,8,60,64 -> 32,8,25,60
 
         # add scale factor
         scale = self.scale or 1./sqrt(D)
