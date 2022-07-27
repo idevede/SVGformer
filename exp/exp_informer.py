@@ -216,7 +216,7 @@ class Exp_Informer(Exp_Basic):
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
-        for i, (batch_x,batch_y,cls_label,mask, curve) in enumerate(vali_loader):
+        for i, (batch_x,batch_y,cls_label,mask, name, curve) in enumerate(vali_loader):
             #print(i)
             cls_label = cls_label.float().to(self.device)
             mask = mask.float().to(self.device)
@@ -264,7 +264,7 @@ class Exp_Informer(Exp_Basic):
             
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x,batch_y,cls_label,mask, curve) in enumerate(train_loader):
+            for i, (batch_x,batch_y,cls_label,mask, name, curve) in enumerate(train_loader):
                 iter_count += 1
                 cls_label = cls_label.to(self.device)
                 mask = mask.float().to(self.device)

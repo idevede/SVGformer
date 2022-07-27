@@ -122,10 +122,11 @@ for ii in range(args.itr):
     setting = 'Curve_embedding_No_pooling'
     setting = 'No_Curve_embedding'
     setting = 'Curve_embedding_lookup_table'
+    #setting = 'Curve_embedding_lookup_table'
 
     exp = Exp(args) # set experiments
-    print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    exp.train(setting)
+    # print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
+    # exp.train(setting)
     
     # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     # exp.test_with_rev(setting, True, ii)

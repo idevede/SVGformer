@@ -162,11 +162,11 @@ class Dataset_Font(Dataset):
         label = torch.tensor(self.categories[idx], dtype=torch.int32)
         curve = torch.tensor(self.curve[idx], dtype=torch.int32)
         #curve = torch.tensor(self.curve_matrix[idx], dtype=torch.int32)
-    
+        name = self.name[idx]
         length = torch.tensor(len(layout)/8, dtype=torch.int32)
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask, curve
+        return layout['x'], layout['y'], layout['label'], mask,name, curve
 
 # class Dataset_Font_Val(Dataset):
 #     def __init__(self, root_path, flag='train', size=None, 
