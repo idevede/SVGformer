@@ -123,20 +123,19 @@ for ii in range(args.itr):
     setting = 'No_Curve_embedding'
     #setting = 'Curve_embedding_lookup_table'
     setting = 'Curve_embedding_distance'
-    setting = 'Curve_embedding_distance_70'
 
     exp = Exp(args) # set experiments
-    print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    exp.train(setting)
+    # print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
+    # exp.train(setting)
     
+    # # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    # # exp.test_with_rev(setting, True, ii)
+
     # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    # exp.test_with_rev(setting, True, ii)
+    # exp.test(setting, True, ii)
 
-    print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    exp.test(setting, True, ii)
-
-    # print('>>>>>>>retrieval : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    # exp.retrieval(setting, True, ii)
+    print('>>>>>>>retrieval : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    exp.retrieval(setting, True, ii)
 
     # if args.do_predict:
     #     print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))

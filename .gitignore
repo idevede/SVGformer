@@ -29,6 +29,10 @@ examples/LSTMModel*
 checkpoints*
 results*
 results/*
+results_deepsvg_format/*
+results_deepsvg_format_plot/*
 checkpoints/*
 checkpoints_debug/*
+*.pkl
+*.npy
 

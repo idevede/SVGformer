@@ -328,6 +328,7 @@ class Exp_Informer(Exp_Basic):
 
         if load:
             path = os.path.join(self.args.checkpoints, setting)
+            print(path)
             best_model_path = path+'/'+'checkpoint.pth'
             self.model.load_state_dict(torch.load(best_model_path))
 
@@ -338,7 +339,7 @@ class Exp_Informer(Exp_Basic):
         trues = None
 
         # result save
-        folder_path = './results_deepsvg_format/' + setting +'debug/'
+        folder_path = './results_deepsvg_format/' + setting +'/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -578,12 +579,13 @@ class Exp_Informer(Exp_Basic):
         results_lable = {}
         results_dec = {}
 
-        
-        for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
+        for i, (batch_x,batch_y,cls_label,mask, name, curve) in enumerate(test_loader):
+        #for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
             mask = mask.float().to(self.device)
+            curve = curve.to(self.device)
             hidden_enc, batch_y, input_dec = self._process_one_batch_retrieval(
-                test_data, batch_x, batch_y, cls_label, mask) # 
+                test_data, batch_x, batch_y, cls_label, mask, curve) # 
             #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
 
             batch_x = batch_x.float().to(self.device)
@@ -791,7 +793,7 @@ class Exp_Informer(Exp_Basic):
 
         return outputs, batch_y, outputs_cls, enc_out, dec_inp
 
-    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
+    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, curve, retrival = True, reduce_hid = False):
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float()
 
@@ -813,10 +815,10 @@ class Exp_Informer(Exp_Basic):
                     enc_input = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
         else:
             if self.args.output_attention:
-                enc_input, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
+                enc_input, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask, curve, retrival = retrival, reduce_hid = reduce_hid)
                 #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
             else:
-                enc_input, outputs_cls = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
+                enc_input, outputs_cls = self.model(batch_x, cls_label, dec_inp, mask, curve, retrival = retrival, reduce_hid = reduce_hid)
        
         #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
         batch_y = batch_y.to(self.device)

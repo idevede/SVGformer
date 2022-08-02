@@ -65,7 +65,7 @@ class Informer(nn.Module):
         self.projection = nn.Linear(d_model, c_out, bias=True)
         self.cls = nn.Linear(d_model, 3, bias=True) # 3 classes of the curve type
         
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, curve, dec_curve_inp,
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, curve, dec_curve_inp=None,
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
 
         self.pred_len = x_enc.shape[1]-1

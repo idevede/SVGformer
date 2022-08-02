@@ -60,6 +60,7 @@ class Dataset_Font(Dataset):
         
         self.data = []
         self.label_length = 46
+        self.max_length = 70
         # max_length = 0
         self.categories = []
         self.name = []
@@ -67,7 +68,7 @@ class Dataset_Font(Dataset):
         self.curve_matrix = []
 
         for i in range(len(data_pkl)):
-            if len(data_pkl[i])>60:
+            if len(data_pkl[i])>self.max_length:
                 continue
             #data_single = np.load(path+'/'+file)
             data_single = data_pkl[i]
@@ -79,25 +80,40 @@ class Dataset_Font(Dataset):
             self.data.append(data_single)
             self.categories.append(data_label[i])
             self.name.append(data_name[i])
-            self.curve_matrix.append(data_curve_mat[data_name[i]][:60,:60])
-            queu = np.ones(60)*self.label_length
+            self.curve_matrix.append(data_curve_mat[data_name[i]][:self.max_length,:self.max_length])
+            queu = np.ones(self.max_length)*self.label_length
             d_c = np.array(data_curve[data_name[i]])
             
-            
-            dict_temp = {}
-            for i in range(len(d_c)):
-                if d_c[i] not in dict_temp:
-                    dict_temp[d_c[i]] = []
-                dict_temp[d_c[i]].append(i)
+            # 这个是原始label
+            # dict_temp = {}
+            # for i in range(len(d_c)):
+            #     if d_c[i] not in dict_temp:
+            #         dict_temp[d_c[i]] = []
+            #     dict_temp[d_c[i]].append(i)
 
-            key_value = list(dict_temp.keys())  
-            key_value.sort()
-            i = 0
-            for key in key_value:
-                for data in dict_temp[key]:
-                   queu[data] = i
-                i += 1 
+            # key_value = list(dict_temp.keys())  
+            # key_value.sort()
+            # i = 0
+            # for key in key_value:
+            #     for data in dict_temp[key]:
+            #        queu[data] = i
+            #     i += 1 
+            # self.curve.append(queu)
+
+            queu = np.ones(self.max_length)*self.label_length
+            
+            #print(len(d_c))
+            for i in range(len(d_c)):
+                queu[i] = 30
+                for j in range(i,len(d_c)):
+                    if d_c[i] == d_c[j]:
+                        dic = j - i
+                        if dic > 30:
+                            continue
+                        else:
+                            queu[i]  = dic 
             self.curve.append(queu)
+
 
 
             # queu_2d = np.zeros((60,60))
@@ -110,8 +126,8 @@ class Dataset_Font(Dataset):
 
             # #queu[:len(d_c)] = d_c
             # self.curve.append(queu)
-            if i>1000:
-                break
+            # if i>1000:
+            #     break
 
             
             
@@ -125,7 +141,7 @@ class Dataset_Font(Dataset):
 
         self.max_length = max_length
         if self.max_length is None:
-            self.max_length = 60
+            self.max_length = 70
             '''
             json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
             files= os.listdir(json_path)
