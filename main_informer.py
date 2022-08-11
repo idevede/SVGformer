@@ -11,10 +11,10 @@ parser.add_argument('--model', type=str, default='informer',help='model of exper
 parser.add_argument('--data', type=str,  default='Fonts', help='data')
 parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
 # Font options 
-# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train", help="/path/to/train/json")
-# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
-parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Train", help="/path/to/train/json")
-parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Val", help="/path/to/val/json")
+parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train_aug_name", help="/path/to/train/json")
+parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
+# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Train", help="/path/to/train/json")
+# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Val", help="/path/to/val/json")
 
 #parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_deepsvg_font/fonts/val_deepsvg.pkl", help="/path/to/val/json")
 
@@ -124,6 +124,7 @@ for ii in range(args.itr):
     #setting = 'Curve_embedding_lookup_table'
     setting = 'Curve_embedding_distance'
     setting = 'Curve_embedding_distance_70'
+    setting = 'Curve_ori_dataset'
 
     exp = Exp(args) # set experiments
     print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))

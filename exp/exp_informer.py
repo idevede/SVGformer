@@ -571,7 +571,8 @@ class Exp_Informer(Exp_Basic):
         trues = None
 
         # result save
-        folder_path = './results_deepsvg_format/retrieval_task/'
+        #folder_path = './results_deepsvg_format/retrieval_task/'
+        folder_path = './results_deepsvg_format/' + setting +'/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 

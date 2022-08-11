@@ -165,7 +165,7 @@ class DataEmbedding(nn.Module):
         #x = torch.cat([x,curve],2)
         #curve = 
         #x = self.value_embedding(x) + self.position_embedding(x) + self.curve_embedding(curve.to(torch.float)) #+ self.temporal_embedding(x_mark)
-        x = self.value_embedding(x) + self.position_embedding(x) + self.tok_emb(curve.long()) #+ self.curve_embedding(curve.to(torch.float)) #+ self.temporal_embedding(x_mark)
+        x = self.value_embedding(x) + self.position_embedding(x) #+ self.tok_emb(curve.long()) #+ self.curve_embedding(curve.to(torch.float)) #+ self.temporal_embedding(x_mark)
         
         return self.dropout(x)
 

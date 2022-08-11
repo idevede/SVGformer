@@ -123,6 +123,7 @@ for ii in range(args.itr):
     setting = 'No_Curve_embedding'
     #setting = 'Curve_embedding_lookup_table'
     setting = 'Curve_embedding_distance'
+    setting = 'Curve_ori_dataset'
 
     exp = Exp(args) # set experiments
     # print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
