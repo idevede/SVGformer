@@ -71,7 +71,7 @@ class Informer(nn.Module):
         self.head_2 = nn.Linear(50, 25, bias=False)
         
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, adj, 
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False):
+                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = True):
 
         self.pred_len = x_enc.shape[1]-1
         #self.pred_len = x_enc.shape[1]
@@ -94,6 +94,30 @@ class Informer(nn.Module):
             return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
         else:
             return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:] # [B, L, D]
+
+    def forward_with_enc(self, enc_out, x_dec, x_enc, x_mark_enc=None, x_mark_dec =None, adj = None,
+                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
+
+        self.pred_len = x_enc.shape[1]-1
+        
+        enc_out2 = self.enc_embedding(x_enc, x_mark_enc, adj)
+        # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
+        enc_out2, attns = self.encoder(enc_out2, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
+        #enc_out
+        # if retrival:
+        #     return enc_out, attns
+        #with torch.no_grad():
+        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
+        dec_reg_out = self.projection(dec_out)
+        dec_cls_out = self.cls(dec_out)
+        
+        # dec_out = self.end_conv1(dec_out)
+        # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
+        if self.output_attention:
+            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
+        else:
+            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out2 # [B, L, D]
 
 
 class InformerStack(nn.Module):

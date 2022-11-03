@@ -306,17 +306,6 @@ class Exp_Informer(Exp_Basic):
         
         preds = None
         trues = None
-        # name_all = []
-        # for i, (batch_x,batch_y,cls_label,mask, name) in enumerate(test_loader):
-        #         for nn in name:
-        #             name_all.append(nn)
-        # # result save
-        # folder_path = './results_deepsvg_format/' + setting +'/'
-        # if not os.path.exists(folder_path):
-        #     os.makedirs(folder_path)
-        # pkl.dump(name_all, open(folder_path+"name.pkl","wb"))
-
-        # return
         
         for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
@@ -379,7 +368,7 @@ class Exp_Informer(Exp_Basic):
         np.save(folder_path+'true_' +str(ii) +'.npy', trues)
 
         return
-
+    '''
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')
         
@@ -435,6 +424,7 @@ class Exp_Informer(Exp_Basic):
         np.save(folder_path+'real_prediction.npy', preds)
         
         return
+    '''
 
     def retrieval(self, setting, load, ii):
         # test_data = self.test_data
@@ -455,7 +445,7 @@ class Exp_Informer(Exp_Basic):
         trues = None
 
         # result save
-        folder_path = './results_deepsvg_format/retrieval_task_train/'
+        folder_path = './results_deepsvg_format/'+ ii +'/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -503,6 +493,100 @@ class Exp_Informer(Exp_Basic):
 
         
         return
+
+    def encode(self, setting, x_input, svg=[[0]], adj = None, load = True): # svg: never get used in this function
+        # test_data = self.test_data
+        # test_loader = self.test_loader
+        cls_label = svg #torch.tensor(svg[:,:1]).unsqueeze(0).long().to(self.device)
+        
+        x_input = torch.tensor(x_input).float().unsqueeze(0).to(self.device)
+        
+        mask = (x_input !=-1).float().to(self.device)
+
+        #test_data, test_loader = self._get_data(flag = 'test_font_with_name')
+
+        if load:
+            path = os.path.join(self.args.checkpoints, setting)
+            best_model_path = path+'/'+'checkpoint.pth'
+            print(best_model_path)
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        
+        self.model.eval()
+        
+        enc_out = self._process_one_batch_encoder(
+                x_input, cls_label, mask, adj)
+
+        return enc_out
+        
+        
+        
+
+    def decode(self, setting, enc_out, x_dec, x_input, svg=[[0]], load = False):
+        # test_data = self.test_data
+        # test_loader = self.test_loader
+        cls_label = torch.tensor(svg).unsqueeze(0).unsqueeze(-1).long().to(self.device)
+        
+        x_input = torch.tensor(x_input).float().unsqueeze(0).to(self.device)
+        
+        mask = (x_input !=-1).float().to(self.device)
+
+        #test_data, test_loader = self._get_data(flag = 'test_font_with_name')
+
+        if load:
+            path = os.path.join(self.args.checkpoints, setting)
+            best_model_path = path+'/'+'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        
+        self.model.eval()
+        
+        pred, pred_cls, enc_out = self._process_one_batch_interpolation_with_enc(
+               enc_out, x_dec, x_input, x_input, cls_label, mask)
+
+        #return enc_out.detach().cpu().numpy()[0]
+        
+        
+        #'''
+        probs = F.softmax(pred_cls, dim=-1)
+        _, pred_class = torch.topk(probs, k=1, dim=-1)
+        data_pad = -1*torch.ones((x_input.shape[0],x_input.shape[1],5)).to(self.device)
+            #pred[:,:,0] = pred_class[:,:,0]
+
+        # we use the true label    
+        # pred_class = torch.cat((cls_label[:,:1,:],pred_class),1)[:x_input.shape[0]]
+        pred_class = torch.cat((cls_label[:,:1,:],pred_class),1)[:x_input.shape[0]]
+        #pred_class = torch.tensor(cls_label.reshape(pred.shape[0],pred.shape[1]+1,-1))[:x_input.shape[0]].to(self.device)
+
+
+        pred_mask = self.CMD_ARGS_MASK[pred_class.long()].squeeze().to(self.device)
+        
+        
+
+        pred = torch.cat((x_input[:,:1,:],pred),1)[:x_input.shape[0],:,:]
+        #pred = pred*mask
+        pred = pred*pred_mask
+        pred_tmp = pred.reshape(-1,8).detach().cpu().numpy()
+        pred_tmp[pred_tmp.sum(axis=1)==0,:] = -1
+        pred = torch.tensor(pred_tmp.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
+            
+            
+            
+        
+        #pred_class = pred_class.reshape(-1,1).detach().cpu().numpy()
+        #cls_label = cls_label.reshape(-1,1).detach().cpu().numpy()
+        pred_class[cls_label==-1] = -1
+        #pred_class = torch.tensor(pred_class.reshape(pred.shape[0],pred.shape[1],-1)).float().to(self.device)
+        
+            
+            
+        pred = torch.cat((pred_class.float(),data_pad,pred),2)
+        #pred = torch.cat((cls_label.float(),data_pad,pred),2)
+        
+           
+        return pred, enc_out
+
+
     
 
     def _process_one_batch(self, dataset_object, batch_x, batch_y, cls_label, mask, adj):
@@ -541,7 +625,7 @@ class Exp_Informer(Exp_Basic):
         return outputs, batch_y, outputs_cls
 
 
-    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, adj = [],retrival = True, reduce_hid = False):
+    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, adj = [],retrival = True, reduce_hid = True):
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float()
 
@@ -572,3 +656,53 @@ class Exp_Informer(Exp_Basic):
         batch_y = batch_y.to(self.device)
 
         return enc_input, batch_y, dec_inp
+
+    
+    def _process_one_batch_encoder(self, batch_x, cls_label, mask, adj = None, retrival = True, reduce_hid = False):
+        
+        batch_y = batch_x
+
+        # decoder input
+        if self.args.padding==0:
+            dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float().to(self.device)
+        elif self.args.padding==1:
+            dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float().to(self.device)
+        dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
+        # encoder - decoder
+       
+        enc_out, _ = self.model(batch_x, cls_label, dec_inp, mask, adj, retrival = True) #cls_label: never get used
+        
+
+        return enc_out #enc_input, batch_y, dec_inp
+
+    def _process_one_batch_interpolation_with_enc(self, enc_out, x_dec, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
+        # enc_out = torch.tensor(enc_out).float().unsqueeze(0).to(self.device)
+        # enc_out=Variable(enc_out,requires_grad=True)
+        x_dec = torch.tensor(x_dec).float().unsqueeze(0).to(self.device)
+        dec_inp = x_dec
+
+        # decoder input
+        # if self.args.padding==0:
+        #     dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
+        # elif self.args.padding==1:
+        #     dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
+        # dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
+        # encoder - decoder
+        if self.args.use_amp:
+            with torch.cuda.amp.autocast():
+                if self.args.output_attention:
+                    outputs = self.model.decode_exp(enc_out, x_dec)[0]
+                else:
+                    outputs = self.model.decode_exp(enc_out, x_dec)
+        else:
+            if self.args.output_attention:
+                outputs, outputs_cls, _ = self.model.decode_exp(enc_out, x_dec)
+                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
+            else:
+                outputs, outputs_cls, enc_out = self.model.forward_with_enc(enc_out, x_dec, batch_x)
+        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
+        #batch_y = batch_y.to(self.device)
+
+
+        return outputs, outputs_cls, enc_out #enc_input, batch_y, dec_inp
+

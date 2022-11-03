@@ -110,8 +110,4 @@ for ii in range(args.itr):
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     exp.test(setting, True, ii)
 
-    # if args.do_predict:
-    #     print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    #     exp.predict(setting, True)
-
     torch.cuda.empty_cache()
