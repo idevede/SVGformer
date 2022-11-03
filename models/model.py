@@ -70,17 +70,18 @@ class Informer(nn.Module):
 
         self.head_2 = nn.Linear(50, 25, bias=False)
         
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, adj,
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, adj, 
+                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False):
 
         self.pred_len = x_enc.shape[1]-1
         #self.pred_len = x_enc.shape[1]
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, curve_info = self.enc_embedding(x_enc, x_mark_enc, adj)
         enc_out_2 = self.gc2(enc_out,adj)
         enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask,  curve_relationship = enc_out_2) # torch.Size([32, 25, 512])
 
         #enc_out += self.head_2(enc_out_2.transpose(1,2)).transpose(1, 2)
-        
+        if retrival:
+            return enc_out, attns
 
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)

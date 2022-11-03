@@ -11,15 +11,9 @@ parser.add_argument('--model', type=str, default='informer',help='model of exper
 parser.add_argument('--data', type=str,  default='Fonts', help='data')
 parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
 # Font options 
-parser.add_argument("--train_font", default="/meladyfs/newyork/defucao/Adobe/Informer2020-icons-deepsvg-format/data/icons_data/Train", help="/path/to/train/json")
-parser.add_argument("--val_font", default="/meladyfs/newyork/defucao/Adobe/Informer2020-icons-deepsvg-format/data/icons_data/Val", help="/path/to/val/json")
-#parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_deepsvg_font/fonts/val_deepsvg.pkl", help="/path/to/val/json")
+parser.add_argument("--train_font", default="/meladyfs/newyork/defucao/Adobe/Dataset_font/DeepSVG_format/Train_with_curve", help="/path/to/train/json")
+parser.add_argument("--val_font", default="/meladyfs/newyork/defucao/Adobe/Dataset_font/DeepSVG_format/Val_with_curve", help="/path/to/val/json")
 
-# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/Train/npy", help="/path/to/train/json")
-# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/Val/npy", help="/path/to/val/json")
-# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy", help="/path/to/train/json")
-# #parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy_val", help="/path/to/val/json")
-# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy", help="/path/to/val/json")
 
 
 parser.add_argument('--data_path', type=str, default='ETTh1.csv', help='data file')    
@@ -106,14 +100,7 @@ Exp = Exp_Informer
 
 for ii in range(args.itr):
     # setting record of experiments
-    setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_fc{}_eb{}_dt{}_mx{}_{}_{}'.format(args.model, args.data, args.features, 
-                args.seq_len, args.label_len, args.pred_len,
-                args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.factor, 
-                args.embed, args.distil, args.mix, args.des, ii)
-    setting = "Icons_results_fonts_model_fine-tune"
-    setting = "Icons_results_fonts_model_fine-tune-debug"
-    setting = "Icons_results_with_GCN_notinAtt"
-    setting = "Icons_results_with_GCN_inAtt"
+    setting = "Fonts_results_with_GCN_inAtt"
 
 
     exp = Exp(args) # set experiments

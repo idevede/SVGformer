@@ -54,13 +54,13 @@ class Dataset_Font(Dataset):
         data_label = pkl.load(F_label)
         data_name = pkl.load(F_name)
 
-        #F_adj = open(path+'/data_adj.pkl', 'rb')
-        F_adj = open(path+'/cd_dic.pkl', 'rb')
+        F_adj = open(path+'/data_adj.pkl', 'rb')
+        #F_adj = open(path+'/cd_dic.pkl', 'rb')
         data_adj = pkl.load(F_adj)
 
 
         self.data = []
-        max_length = 50
+        max_length = 60
         self.categories = []
         self.name = []
         self.adj = []
@@ -77,26 +77,11 @@ class Dataset_Font(Dataset):
             self.categories.append(data_label[i].squeeze())
             self.name.append(data_name[i])
             #self.adj.append(data_adj[data_name[i]][:50,:50])
-            self.adj.append(data_adj[data_name[i]][:max_length,:max_length])
-            #self.categories.append(file[-5:-4])
-            # if max_length < len(data):
-            #     max_length = len(data)
-
-
-
-        # images, annotations, categories = data['images'], data['annotations'], data['categories']
-        # self.size = pow(2, precision)
-
-        # self.categories = {c["id"]: c for c in categories}
-        # self.colors = gen_colors(len(self.categories))
-
-        # self.json_category_id_to_contiguous_id = {
-        #     v: i + self.size for i, v in enumerate([c["id"] for c in self.categories.values()])
-        # }
-
-        # self.contiguous_category_id_to_json_id = {
-        #     v: k for k, v in self.json_category_id_to_contiguous_id.items()
-        # }
+            if data_name[i] not in data_adj:
+                self.adj.append(np.zeros([max_length,max_length]))
+            else:
+                self.adj.append(data_adj[data_name[i]][:max_length,:max_length])
+            
 
         #self.vocab_size = self.size + len(self.categories) + 3  # bos, eos, pad tokens
         self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 

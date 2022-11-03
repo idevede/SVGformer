@@ -224,10 +224,6 @@ class Exp_Informer(Exp_Basic):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
 
-        
-        path = "/meladyfs/newyork/defucao/Adobe/SVG_Informer_icons/checkpoints_debug/Fonts_results_with_GCN_inAtt"
-        best_model_path = path+'/'+'checkpoint.pth'
-        self.model.load_state_dict(torch.load(best_model_path))
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
