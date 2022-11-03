@@ -31,9 +31,17 @@ def loss_2_type(targets, logits, logits_cls, cls_label, mask): # label, pred, pr
 class Exp_Informer(Exp_Basic):
     def __init__(self, args):
         super(Exp_Informer, self).__init__(args)
-        self.train_data, self.train_loader = self._get_data(flag = 'train_font')
-        self.vali_data, self.vali_loader = self._get_data(flag = 'val_font')
-        self.test_data, self.test_loader = self._get_data(flag = 'test_font')
+        self.train_data, self.train_loader = None, None #self._get_data(flag = 'train_font')
+        self.vali_data, self.vali_loader = None, None #self._get_data(flag = 'val_font')
+        self.test_data, self.test_loader = None, None #self._get_data(flag = 'test_font')
+
+        self.CMD_ARGS_MASK = torch.tensor([[ 1, 1, 0, 0, 0, 0, 1, 1],   # m
+                                  [ 1, 1, 0, 0, 0, 0, 1, 1],   # l
+                                  [ 1, 1, 1, 1, 1, 1, 1, 1],   # c
+                                  [ 1, 1, 0, 0, 0, 0, 1, 1],   # a
+                                  [ 0, 0, 0, 0, 0, 0, 0, 0],   # EOS
+                                  [ 0, 0, 0, 0, 0, 0, 0, 0],   # SOS
+                                  [ 0, 0, 0, 0, 0, 0, 0, 0]])  # z
 
     
     def _build_model(self):
@@ -203,6 +211,9 @@ class Exp_Informer(Exp_Basic):
         return total_loss
 
     def train(self, setting):
+        self.train_data, self.train_loader = self._get_data(flag = 'train_font')
+        self.vali_data, self.vali_loader = self._get_data(flag = 'val_font')
+        self.test_data, self.test_loader = self._get_data(flag = 'test_font')
         train_data = self.train_data
         train_loader = self.train_loader
         #= self._get_data(flag = 'train_font')
@@ -293,6 +304,8 @@ class Exp_Informer(Exp_Basic):
         return self.model
 
     def test(self, setting, load, ii):
+        if self.test_data is None:
+            self.test_data, self.test_loader = self._get_data(flag = 'test_font')
         test_data = self.test_data
         test_loader = self.test_loader
         if load:
@@ -306,6 +319,10 @@ class Exp_Informer(Exp_Basic):
         
         preds = None
         trues = None
+
+        results_pred = {}
+        results_lable = {}
+
         
         for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
@@ -322,7 +339,11 @@ class Exp_Informer(Exp_Basic):
             #pred[:,:,0] = pred_class[:,:,0]
             pred = torch.cat((true[:,:1,:],pred),1)
             pred_class = torch.cat((cls_label.unsqueeze(-1)[:,:1,:],pred_class.int()),1)
-            pred = pred*mask
+            pred_mask = self.CMD_ARGS_MASK[pred_class.long()].squeeze().to(self.device)
+
+            #pred = pred*mask
+            pred = pred*pred_mask
+
             pred_tmp = pred.reshape(-1,8).detach().cpu().numpy()
             pred_tmp[pred_tmp.sum(axis=1)==0,:] = -1
             pred = torch.tensor(pred_tmp.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
@@ -340,6 +361,13 @@ class Exp_Informer(Exp_Basic):
             true = torch.cat((cls_label.float(),data_pad.float(),true),2)
             # np.save('./layouts_pred.csv', layouts)
             # np.save('./layouts_label.csv', x.cpu().numpy())
+
+            p_data = pred.detach().cpu().numpy()
+            for i in range(len(p_data)):
+                results_pred[name[i]] = p_data[i]
+                results_lable[name[i]] = true[i]
+
+
             if preds is not None:
                 preds = np.concatenate((preds,pred.detach().cpu().numpy()),0)
                 trues = np.concatenate((trues,true.detach().cpu().numpy()),0)
@@ -366,6 +394,14 @@ class Exp_Informer(Exp_Basic):
         # np.save(folder_path+'metrics_' +str(ii) +'.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path+'pred_' +str(ii) +'.npy', preds)
         np.save(folder_path+'true_' +str(ii) +'.npy', trues)
+
+        file = open(folder_path+'pred_by_name.pkl','wb')
+        pkl.dump(results_pred, file)
+        file.close()
+        file = open(folder_path+'true_by_name.pkl','wb')
+        pkl.dump(results_lable, file)
+        file.close()
+
 
         return
     '''
@@ -429,6 +465,8 @@ class Exp_Informer(Exp_Basic):
     def retrieval(self, setting, load, ii):
         # test_data = self.test_data
         # test_loader = self.test_loader
+        if self.test_data is None:
+            self.test_data, self.test_loader = self._get_data(flag = 'test_font')
 
         test_data = self.test_data
         test_loader = self.test_loader
