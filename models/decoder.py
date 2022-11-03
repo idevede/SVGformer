@@ -38,17 +38,10 @@ class DecoderLayer(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, layers, norm_layer=None):
         super(Decoder, self).__init__()
-        # self.linear = nn.Linear(1,25)
         self.layers = nn.ModuleList(layers)
         self.norm = norm_layer
 
-    def forward(self, x, cross, x_mask=None, cross_mask=None, reduce_hid=False):
-        
-        #print(cross.shape)
-        if reduce_hid:
-            cross = self.linear(cross)
-            cross= cross.reshape(cross.shape[0], cross.shape[2], cross.shape[1])
-
+    def forward(self, x, cross, x_mask=None, cross_mask=None):
         for layer in self.layers:
             x = layer(x, cross, x_mask=x_mask, cross_mask=cross_mask)
 

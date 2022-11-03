@@ -11,15 +11,12 @@ parser.add_argument('--model', type=str, default='informer',help='model of exper
 parser.add_argument('--data', type=str,  default='Fonts', help='data')
 parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
 # Font options 
-parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Train", help="/path/to/train/json")
-parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
-#parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_deepsvg_font/fonts/val_deepsvg.pkl", help="/path/to/val/json")
-
-# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/Train/npy", help="/path/to/train/json")
-# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/Val/npy", help="/path/to/val/json")
-# parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy", help="/path/to/train/json")
-# #parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy_val", help="/path/to/val/json")
-# parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy", help="/path/to/val/json")
+parser.add_argument("--train_font", default="/meladyfs/newyork/defucao/Adobe/Dataset_font/DeepSVG_format/Train_with_curve", help="/path/to/train/json")
+#parser.add_argument("--train_font", default="/meladyfs/newyork/defucao/Adobe/Dataset_font/DeepSVG_format/Val_with_curve", help="/path/to/train/json")
+#parser.add_argument("--val_font", default="/home/defuc/sensei-fs-symlink/users/defuc/dataset/Dataset_font/DeepSVG_format/Val", help="/path/to/val/json")
+#parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Train", help="/path/to/train/json")
+#parser.add_argument("--train_font", default="/home/defuc/sensei-fs-symlink/users/defuc/workspace/mat/Font_data_before_simply/DeepSVG_format/Val", help="/path/to/train/json")
+parser.add_argument("--val_font", default="/meladyfs/newyork/defucao/Adobe/Dataset_font/DeepSVG_format/Val_with_curve", help="/path/to/val/json")
 
 
 parser.add_argument('--data_path', type=str, default='ETTh1.csv', help='data file')    
@@ -54,7 +51,7 @@ parser.add_argument('--do_predict', action='store_true', help='whether to predic
 parser.add_argument('--mix', action='store_false', help='use mix attention in generative decoder', default=True)
 parser.add_argument('--cols', type=str, nargs='+', help='certain cols from the data files as the input features')
 parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
-parser.add_argument('--itr', type=int, default=1, help='experiments times')
+parser.add_argument('--itr', type=int, default=2, help='experiments times')
 parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
 parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
@@ -66,10 +63,9 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
-parser.add_argument('--gpu', type=int, default=7, help='gpu')
+parser.add_argument('--gpu', type=int, default=0, help='gpu')
 parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
 parser.add_argument('--devices', type=str, default='0,1,2,3',help='device ids of multile gpus')
-parser.add_argument('--seed', type=int, default=1 ,help='fix results')
 
 args = parser.parse_args()
 
@@ -80,11 +76,6 @@ if args.use_gpu and args.use_multi_gpu:
     device_ids = args.devices.split(',')
     args.device_ids = [int(id_) for id_ in device_ids]
     args.gpu = args.device_ids[0]
-
-torch.manual_seed(args.seed)#为CPU设置随机种子 
-if args.use_gpu and args.use_multi_gpu: 
-    torch.cuda.manual_seed(args.seed)#为当前GPU设置随机种子 
-    torch.cuda.manual_seed_all(args.seed)#为所有GPU设置随机种子
 
 data_parser = {
     'ETTh1':{'data':'ETTh1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
@@ -110,53 +101,25 @@ print(args)
 
 Exp = Exp_Informer
 
-import pickle as pkl
-file = open('./results_deepsvg_format/test_with_rev_input_mask/enc_with_forward_by_name_100.pkl', 'rb')
-enc_by_name = pkl.load(file)
-file.close()
-file = open('./results_deepsvg_format/retrieval_task/input_by_name.pkl', 'rb')
-input_by_name = pkl.load(file)
-file.close()
-file = open('./results_deepsvg_format/retrieval_task/dec_by_name.pkl', 'rb')
-dec_by_name = pkl.load(file)
-file.close()
-file = open('./results_deepsvg_format/interpolation_task/svg_by_name.pkl', 'rb')
-svg_by_name = pkl.load(file)
-file.close()
-
 for ii in range(args.itr):
     # setting record of experiments
     setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_fc{}_eb{}_dt{}_mx{}_{}_{}'.format(args.model, args.data, args.features, 
-    # setting = 'Linear_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_fc{}_eb{}_dt{}_mx{}_{}_{}'.format(args.model, args.data, args.features, 
                 args.seq_len, args.label_len, args.pred_len,
                 args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.factor, 
                 args.embed, args.distil, args.mix, args.des, ii)
+    setting = "Icons_results_fonts_model_fine-tune"
+    setting = "Icons_results_fonts_model_fine-tune-debug"
+    setting = "Icons_results_with_curve"
+    setting = "Fonts_results_with_GCN_inAtt_test"
+
 
     exp = Exp(args) # set experiments
-    # print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    # exp.train(setting)
+    print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
+    exp.train(setting)
     
-    # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    # exp.test(setting, True, ii)
+    print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    exp.test(setting, True, ii)
 
-    print('>>>>>>>retrieval : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    #key = 'CormorantUpright-SemiBold_121_y_478_1000-60-y'
-    #exp.retrieval(setting, True, ii)
-    results_enc_with_forward = {}
-    i = 0
-    for key in list(enc_by_name.keys()):
-        enc_output = exp.encode(setting, input_by_name[key])
-        pred, enc_output = exp.decode(setting, enc_output, dec_by_name[key], input_by_name[key], svg_by_name[key], load = False)
-        results_enc_with_forward[key] = enc_output[0]
-        i+=1
-        if i >100:
-            break
-
-    # encode result, decode input, input for mask (N*8), input for label(N*14)
-    file = open('./results_deepsvg_format/test_with_rev_input_mask/enc_with_forward_by_name_100.pkl','wb')
-    #file = open('./results_deepsvg_format/test_with_rev_input_mask/enc_with_forward_by_name.pkl','wb')
-    pkl.dump(results_enc_with_forward, file)
-    file.close()
     # if args.do_predict:
     #     print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     #     exp.predict(setting, True)

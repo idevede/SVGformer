@@ -1,14 +1,9 @@
-from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Font_Val, Dataset_Pred, Dataset_Font
+from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_Font
 from exp.exp_basic import Exp_Basic
 from models.model import Informer, InformerStack
 
-import pickle as pkl
-
 from utils.tools import EarlyStopping, adjust_learning_rate
-from utils.metrics import metric, get_acc_p_r_f1, get_acc
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
-
-from torch.autograd import Variable
+from utils.metrics import metric
 
 import numpy as np
 
@@ -20,7 +15,7 @@ from torch.utils.data import DataLoader
 
 import os
 import time
-
+import pickle as pkl
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -36,17 +31,9 @@ def loss_2_type(targets, logits, logits_cls, cls_label, mask): # label, pred, pr
 class Exp_Informer(Exp_Basic):
     def __init__(self, args):
         super(Exp_Informer, self).__init__(args)
-        # self.train_data, self.train_loader = self._get_data(flag = 'train_font')
-        # self.vali_data, self.vali_loader = self._get_data(flag = 'val_font')
-        #self.test_data, self.test_loader = self._get_data(flag = 'test_font')
-
-        self.CMD_ARGS_MASK = torch.tensor([[ 1, 1, 0, 0, 0, 0, 1, 1],   # m
-                                  [ 1, 1, 0, 0, 0, 0, 1, 1],   # l
-                                  [ 1, 1, 1, 1, 1, 1, 1, 1],   # c
-                                  [ 1, 1, 0, 0, 0, 0, 1, 1],   # a
-                                  [ 0, 0, 0, 0, 0, 0, 0, 0],   # EOS
-                                  [ 0, 0, 0, 0, 0, 0, 0, 0],   # SOS
-                                  [ 0, 0, 0, 0, 0, 0, 0, 0]])  # z
+        self.train_data, self.train_loader = self._get_data(flag = 'train_font')
+        self.vali_data, self.vali_loader = self._get_data(flag = 'val_font')
+        self.test_data, self.test_loader = self._get_data(flag = 'test_font')
 
     
     def _build_model(self):
@@ -97,29 +84,12 @@ class Exp_Informer(Exp_Basic):
             'Solar':Dataset_Custom,
             'custom':Dataset_Custom,
             'Fonts': Dataset_Font,
-            'Fonts_Val': Dataset_Font_Val,
         }
         Data = data_dict[self.args.data]
         timeenc = 0 if args.embed!='timeF' else 1
         #root_path = args.root_path
         data_set = []
-        if flag == 'test_font_with_name':
-            Data = data_dict['Fonts_Val']
-            shuffle_flag = False; drop_last = True; batch_size = args.batch_size; freq=args.freq
-            data_set = Data(
-            root_path=args.val_font,
-            data_path=args.data_path,
-            flag=flag,
-            size=[args.seq_len, args.label_len, args.pred_len],
-            features=args.features,
-            target=args.target,
-            inverse=args.inverse,
-            timeenc=timeenc,
-            freq=freq,
-            cols=args.cols
-        )
-
-        elif flag == 'test_font' or flag == 'val_font':
+        if flag == 'test_font' or flag == 'val_font':
             shuffle_flag = False; drop_last = True; batch_size = args.batch_size; freq=args.freq
             data_set = Data(
             root_path=args.val_font,
@@ -217,16 +187,15 @@ class Exp_Informer(Exp_Basic):
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
-        for i, (batch_x,batch_y,cls_label,mask, name,label) in enumerate(vali_loader):
+        for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(vali_loader):
             #print(i)
             cls_label = cls_label.float().to(self.device)
-            label = torch.tensor(label).long().to(self.device)
             mask = mask.float().to(self.device)
-            pred = self._process_one_batch(
-                    vali_data, batch_x, batch_y, cls_label, mask, )
-
-            loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
-
+            adj = adj.float().to(self.device)
+            pred, true, pred_cls = self._process_one_batch(
+                vali_data, batch_x, batch_y, cls_label, mask, adj)
+            #loss = loss_2_type(true, pred, pred_cls, cls_label, mask)
+            loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])
             #loss = criterion(pred.detach().cpu(), true.detach().cpu())
             total_loss.append(loss.detach().cpu().numpy())
         total_loss = np.average(total_loss)
@@ -234,20 +203,15 @@ class Exp_Informer(Exp_Basic):
         return total_loss
 
     def train(self, setting):
-        self.train_data, self.train_loader = self._get_data(flag = 'train_font')
         train_data = self.train_data
         train_loader = self.train_loader
         #= self._get_data(flag = 'train_font')
-        self.vali_data, self.vali_loader = self._get_data(flag = 'val_font')
         vali_data = self.vali_data
         vali_loader = self.vali_loader
-        
-        test_data = self.vali_data
-        test_loader = self.vali_loader
+        test_data = self.test_data 
+        test_loader = self.test_loader
 
-        path = os.path.join(self.args.checkpoints, setting)
-        if not os.path.exists(path):
-            os.makedirs(path)
+        
 
         time_now = time.time()
         
@@ -260,25 +224,32 @@ class Exp_Informer(Exp_Basic):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
 
+        
+        path = "/meladyfs/newyork/defucao/Adobe/SVG_Informer_icons/checkpoints_debug/Fonts_results_with_GCN_inAtt"
+        best_model_path = path+'/'+'checkpoint.pth'
+        self.model.load_state_dict(torch.load(best_model_path))
+
+        path = os.path.join(self.args.checkpoints, setting)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+
         for epoch in range(self.args.train_epochs):
             iter_count = 0
             train_loss = []
             
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x,batch_y,cls_label,mask, name,label) in enumerate(train_loader):
+            for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(train_loader):
                 iter_count += 1
                 cls_label = cls_label.to(self.device)
                 mask = mask.float().to(self.device)
-                label = torch.tensor(label).long().to(self.device)
+                adj = adj.float().to(self.device)
                 
                 model_optim.zero_grad()
-                pred = self._process_one_batch(
-                    train_data, batch_x, batch_y, cls_label, mask )
-
-                loss = F.cross_entropy(pred.reshape(-1, pred.size(-1)), torch.squeeze(label.long().view(-1,1)), ignore_index=-1)
-
-                #loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])#criterion(pred, true)
+                pred, true, pred_cls = self._process_one_batch(
+                    train_data, batch_x, batch_y, cls_label, mask, adj)
+                loss = loss_2_type(true[:,1:,:], pred, pred_cls, cls_label[:,1:], mask[:,1:,:])#criterion(pred, true)
                 
                 # probs = F.softmax(pred_cls, dim=-1)
                 # _, pred_class = torch.topk(probs, k=1, dim=-1)
@@ -314,9 +285,9 @@ class Exp_Informer(Exp_Basic):
             #self.model.load_state_dict(torch.load(model_path))
             early_stopping(vali_loss, self.model, path)
 
-            # if early_stopping.early_stop:
-            #     print("Early stopping")
-            #     break
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
 
             adjust_learning_rate(model_optim, epoch+1, self.args)
             
@@ -326,13 +297,11 @@ class Exp_Informer(Exp_Basic):
         return self.model
 
     def test(self, setting, load, ii):
-        # test_data = self.test_data
-        # test_loader = self.test_loader
-
-        test_data, test_loader = self._get_data(flag = 'test_font_with_name')
-
+        test_data = self.test_data
+        test_loader = self.test_loader
         if load:
             path = os.path.join(self.args.checkpoints, setting)
+            # path = "/meladyfs/newyork/defucao/Adobe/Informer2020-icons-deepsvg-format/checkpoints_debug/Fonts_results_with_GCN_notinAtt"
             best_model_path = path+'/'+'checkpoint.pth'
             self.model.load_state_dict(torch.load(best_model_path))
 
@@ -341,132 +310,51 @@ class Exp_Informer(Exp_Basic):
         
         preds = None
         trues = None
+        # name_all = []
+        # for i, (batch_x,batch_y,cls_label,mask, name) in enumerate(test_loader):
+        #         for nn in name:
+        #             name_all.append(nn)
+        # # result save
+        # folder_path = './results_deepsvg_format/' + setting +'/'
+        # if not os.path.exists(folder_path):
+        #     os.makedirs(folder_path)
+        # pkl.dump(name_all, open(folder_path+"name.pkl","wb"))
 
-        # result save
-        folder_path = './results_deepsvg_format/cls_task/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
-        class_lable = []
-        class_pred = []
-        flag = False
-        for i, (batch_x,batch_y,cls_label,mask,name, label) in enumerate(test_loader):
+        # return
+        
+        for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(test_loader):
             cls_label = cls_label.to(self.device)
             mask = mask.float().to(self.device)
-            pred = self._process_one_batch(
-                    test_data, batch_x, batch_y, cls_label, mask )
-            # pred, true, pred_cls, _, _ = self._process_one_batch(
-            #     test_data, batch_x, batch_y, cls_label, mask)
+            adj = adj.float().to(self.device)
+
+            pred, true, pred_cls = self._process_one_batch(
+                test_data, batch_x, batch_y, cls_label, mask, adj)
             #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
-
-            
-
-            probs = F.softmax(pred, dim=-1)
-            _, pred_class = torch.topk(probs, k=1, dim=-1)
-
-            if not flag:
-                preds = pred_class.detach().cpu().numpy().reshape(-1)
-                trues = label.detach().cpu().numpy().reshape(-1)
-                flag = True
-            
-            else:
-                preds = np.concatenate((preds,pred_class.detach().cpu().numpy().reshape(-1)))
-                trues = np.concatenate((trues,label.detach().cpu().numpy().reshape(-1)))
-            # class_lable.append(label.detach().cpu().numpy().reshape(-1))
-            # class_pred.append(pred_class.detach().cpu().numpy().reshape(-1))
-        # trues = np.array(trues.cpu().numpy())
-        # preds = np.array(preds.cpu().numpy())
-        precision, recall, f1 = get_acc_p_r_f1(trues,preds )
-        print("precision, recall, f1:", precision, recall, f1)
-        print(get_acc(trues,preds))
-        print(classification_report(trues,preds))
-
-        return
-
-    def test_with_rev(self, setting, load, ii):
-        # test_data = self.test_data
-        # test_loader = self.test_loader
-
-        test_data, test_loader = self._get_data(flag = 'test_font_with_name')
-
-        if load:
-            path = os.path.join(self.args.checkpoints, setting)
-            best_model_path = path+'/'+'checkpoint.pth'
-            self.model.load_state_dict(torch.load(best_model_path))
-
-        
-        self.model.eval()
-        
-        preds = None
-        trues = None
-
-        # result save
-        folder_path = './results_deepsvg_format/test_with_rev_input_mask/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
-        results_pred = {}
-        results_lable = {}
-        results_enc_out = {} 
-        results_dec_inp = {}
-        results_input = {}
-
-        
-        for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
-            cls_label = cls_label.to(self.device)
-            mask = mask.float().to(self.device)
-            pred, true, pred_cls, enc_out, dec_inp = self._process_one_batch(
-                test_data, batch_x, batch_y, cls_label, mask)
-            #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
-
-            
 
             probs = F.softmax(pred_cls, dim=-1)
             _, pred_class = torch.topk(probs, k=1, dim=-1)
             data_pad = -1*torch.ones((true.shape[0],true.shape[1],5)).to(self.device)
             #pred[:,:,0] = pred_class[:,:,0]
-            
-            pred_class = torch.cat((cls_label.unsqueeze(-1)[:,:1,:],pred_class),1)
-
-            pred_mask = self.CMD_ARGS_MASK[pred_class.long()].squeeze().to(self.device)
-
             pred = torch.cat((true[:,:1,:],pred),1)
-            #pred = pred*mask
-            pred = pred*pred_mask
+            pred_class = torch.cat((cls_label.unsqueeze(-1)[:,:1,:],pred_class.int()),1)
+            pred = pred*mask
             pred_tmp = pred.reshape(-1,8).detach().cpu().numpy()
             pred_tmp[pred_tmp.sum(axis=1)==0,:] = -1
             pred = torch.tensor(pred_tmp.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
-            
-            #mask by pred
-            
+
             cls_label = cls_label.reshape(-1,1).detach().cpu().numpy()
             pred_class = pred_class.reshape(-1,1).detach().cpu().numpy()
             pred_class[cls_label==-1] = -1
             pred_class = torch.tensor(pred_class.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
             cls_label = torch.tensor(cls_label.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
-
             
-            
-            pred = torch.cat((pred_class,data_pad,pred),2)
+    
+            pred = torch.cat((pred_class.float(),data_pad.float(),pred),2)
             # layouts = torch.cat((x[:, :1], pred[:, :, 0]), dim=1).detach().cpu().numpy()
              #(pred*mask).detach().cpu().numpy()
-            true = torch.cat((cls_label,data_pad,true),2)
+            true = torch.cat((cls_label.float(),data_pad.float(),true),2)
             # np.save('./layouts_pred.csv', layouts)
             # np.save('./layouts_label.csv', x.cpu().numpy())
-            
-            p_data = pred.detach().cpu().numpy()
-            #true = true.detach().cpu().numpy()
-            enc_out = enc_out.detach().cpu().numpy()
-            dec_inp = dec_inp.detach().cpu().numpy()
-            #batch_x = batch_x.detach().cpu().numpy()
-            for i in range(len(p_data)):
-                results_pred[name[i]] = p_data[i]
-                results_lable[name[i]] = true[i]
-                results_enc_out[name[i]] = enc_out[i]
-                results_dec_inp[name[i]] = dec_inp[i]
-                results_input[name[i]] = batch_x[i] # for inter task's mask matrix
-                #np.save(folder_path+ name[i] +'.npy', p_data[i])
-
             if preds is not None:
                 preds = np.concatenate((preds,pred.detach().cpu().numpy()),0)
                 trues = np.concatenate((trues,true.detach().cpu().numpy()),0)
@@ -482,7 +370,10 @@ class Exp_Informer(Exp_Basic):
         # trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         #print('test shape:', preds.shape, trues.shape)
 
-        
+        # result save
+        folder_path = './results_deepsvg_format/' + setting +'/'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
 
         # mae, mse, rmse, mape, mspe = metric(preds, trues)
         # print('mse:{}, mae:{}'.format(mse, mae))
@@ -490,169 +381,8 @@ class Exp_Informer(Exp_Basic):
         # np.save(folder_path+'metrics_' +str(ii) +'.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path+'pred_' +str(ii) +'.npy', preds)
         np.save(folder_path+'true_' +str(ii) +'.npy', trues)
-        file = open(folder_path+'pred_by_name.pkl','wb')
-        pkl.dump(results_pred, file)
-        file.close()
-        file = open(folder_path+'true_by_name.pkl','wb')
-        pkl.dump(results_lable, file)
-        file.close()
-        file = open(folder_path+'enc_by_name.pkl','wb')
-        pkl.dump(results_enc_out, file)
-        file.close()
-        file = open(folder_path+'dec_by_name.pkl','wb')
-        pkl.dump(results_dec_inp, file)
-        file.close()
-        file = open(folder_path+'input_by_name.pkl','wb')
-        pkl.dump(results_input, file)
-        file.close()
 
         return
-
-    def retrieval(self, setting, load, ii):
-        # test_data = self.test_data
-        # test_loader = self.test_loader
-
-        test_data, test_loader = self._get_data(flag = 'test_font_with_name')
-
-        if load:
-            path = os.path.join(self.args.checkpoints, setting)
-            best_model_path = path+'/'+'checkpoint.pth'
-            self.model.load_state_dict(torch.load(best_model_path))
-
-        
-        self.model.eval()
-        
-        preds = None
-        trues = None
-
-        # result save
-        folder_path = './results_deepsvg_format/retrieval_task/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
-        results_pred = {}
-        results_lable = {}
-        results_dec = {}
-
-        
-        for i, (batch_x,batch_y,cls_label,mask,name) in enumerate(test_loader):
-            cls_label = cls_label.to(self.device)
-            mask = mask.float().to(self.device)
-            hidden_enc, batch_y, input_dec = self._process_one_batch_retrieval(
-                test_data, batch_x, batch_y, cls_label, mask) # 
-            #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
-
-            batch_x = batch_x.float().to(self.device)
-            #batch_y = batch_y.float()
-
-            p_data = hidden_enc.detach().cpu().numpy()
-            input_dec = input_dec.detach().cpu().numpy()
-            batch_y = batch_y.detach().cpu().numpy()
-            for i in range(len(p_data)):
-                results_pred[name[i]] = p_data[i]
-                results_lable[name[i]] = batch_y[i]
-                results_dec[name[i]] = input_dec[i]
-        file = open(folder_path+'enc_by_name.pkl','wb')
-        pkl.dump(results_pred, file)
-        file.close()
-        file = open(folder_path+'input_by_name.pkl','wb')
-        pkl.dump(results_lable, file)
-        file.close()
-        file = open(folder_path+'dec_by_name.pkl','wb')
-        pkl.dump(results_dec, file)
-        file.close()
-
-        
-        return
-    
-    def encode(self, setting, x_input, svg=[[0]], load = True):
-        # test_data = self.test_data
-        # test_loader = self.test_loader
-        cls_label = svg #torch.tensor(svg[:,:1]).unsqueeze(0).long().to(self.device)
-        
-        x_input = torch.tensor(x_input).float().unsqueeze(0).to(self.device)
-        
-        mask = (x_input !=-1).float().to(self.device)
-
-        #test_data, test_loader = self._get_data(flag = 'test_font_with_name')
-
-        if load:
-            path = os.path.join(self.args.checkpoints, setting)
-            best_model_path = path+'/'+'checkpoint.pth'
-            self.model.load_state_dict(torch.load(best_model_path))
-
-        
-        self.model.eval()
-        
-        enc_out = self._process_one_batch_encoder(
-                x_input, cls_label, mask)
-
-        return enc_out
-        
-        
-        
-
-    def decode(self, setting, enc_out, x_dec, x_input, svg=[[0]], load = True):
-        # test_data = self.test_data
-        # test_loader = self.test_loader
-        cls_label = torch.tensor(svg[:,:1]).unsqueeze(0).long().to(self.device)
-        
-        x_input = torch.tensor(x_input).float().unsqueeze(0).to(self.device)
-        
-        mask = (x_input !=-1).float().to(self.device)
-
-        #test_data, test_loader = self._get_data(flag = 'test_font_with_name')
-
-        if load:
-            path = os.path.join(self.args.checkpoints, setting)
-            best_model_path = path+'/'+'checkpoint.pth'
-            self.model.load_state_dict(torch.load(best_model_path))
-
-        
-        self.model.eval()
-        
-        pred, pred_cls, enc_out = self._process_one_batch_interpolation_with_enc(
-               enc_out, x_dec, x_input, x_input, cls_label, mask)
-
-        #return enc_out.detach().cpu().numpy()[0]
-        
-        
-        #'''
-        probs = F.softmax(pred_cls, dim=-1)
-        _, pred_class = torch.topk(probs, k=1, dim=-1)
-        data_pad = -1*torch.ones((x_input.shape[0],x_input.shape[1],5)).to(self.device)
-            #pred[:,:,0] = pred_class[:,:,0]
-            
-        pred_class = torch.cat((cls_label[:,:1,:],pred_class),1)[:x_input.shape[0]]
-
-        pred_mask = self.CMD_ARGS_MASK[pred_class.long()].squeeze().to(self.device)
-        
-        
-
-        pred = torch.cat((x_input[:,:1,:],pred),1)[:x_input.shape[0],:,:]
-        #pred = pred*mask
-        pred = pred*pred_mask
-        pred_tmp = pred.reshape(-1,8).detach().cpu().numpy()
-        pred_tmp[pred_tmp.sum(axis=1)==0,:] = -1
-        pred = torch.tensor(pred_tmp.reshape(pred.shape[0],pred.shape[1],-1)).to(self.device)
-            
-            
-            
-        
-        #pred_class = pred_class.reshape(-1,1).detach().cpu().numpy()
-        #cls_label = cls_label.reshape(-1,1).detach().cpu().numpy()
-        pred_class[cls_label==-1] = -1
-        #pred_class = torch.tensor(pred_class.reshape(pred.shape[0],pred.shape[1],-1)).float().to(self.device)
-        
-            
-            
-        pred = torch.cat((pred_class.float(),data_pad,pred),2)
-        #pred = torch.cat((cls_label.float(),data_pad,pred),2)
-        
-           
-        return pred, enc_out
-        #'''
-    
 
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')
@@ -667,11 +397,16 @@ class Exp_Informer(Exp_Basic):
         preds = None
         trues = None
         
-        for i, (batch_x,batch_y,cls_label,mask) in enumerate(pred_loader):
+        for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(pred_loader):
             cls_label = cls_label.float().to(self.device)
             mask = mask.float().to(self.device)
+            adj = adj.float().to(self.device)
+
             pred, true, pred_cls = self._process_one_batch(
-                pred_data, batch_x, batch_y, cls_label, mask)
+                pred_data, batch_x, batch_y, cls_label, mask, adj)
+
+            # pred, true, pred_cls = self._process_one_batch(
+            #     pred_data, batch_x, batch_y, cls_label, mask)
             # loss = loss_2_type(true, pred, pred_cls, mask)
 
             # pred, true, pred_cls = self._process_one_batch(
@@ -705,7 +440,76 @@ class Exp_Informer(Exp_Basic):
         
         return
 
-    def _process_one_batch(self, dataset_object, batch_x, batch_y, cls_label, mask):
+    def retrieval(self, setting, load, ii):
+        # test_data = self.test_data
+        # test_loader = self.test_loader
+
+        test_data = self.test_data
+        test_loader = self.test_loader
+
+        if load:
+            path = os.path.join(self.args.checkpoints, setting)
+            best_model_path = path+'/'+'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        
+        self.model.eval()
+        
+        preds = None
+        trues = None
+
+        # result save
+        folder_path = './results_deepsvg_format/retrieval_task_train/'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        results_pred = {}
+        results_lable = {}
+        results_dec = {}
+        results_cls_label = {}
+        results_adj = {}
+
+        
+        for i, (batch_x,batch_y,cls_label,mask, name, adj) in enumerate(test_loader):
+            cls_label = cls_label.to(self.device)
+            mask = mask.float().to(self.device)
+            hidden_enc, batch_y, input_dec = self._process_one_batch_retrieval(
+                test_data, batch_x, batch_y, cls_label, mask, adj) # 
+            #loss = loss_2_type(true, pred, pred_cls,cls_label, mask)
+
+            batch_x = batch_x.float().to(self.device)
+            #batch_y = batch_y.float()
+
+            p_data = hidden_enc.detach().cpu().numpy()
+            input_dec = input_dec.detach().cpu().numpy()
+            batch_y = batch_y.detach().cpu().numpy()
+            for i in range(len(p_data)):
+                results_pred[name[i]] = p_data[i]
+                results_lable[name[i]] = batch_y[i]
+                results_dec[name[i]] = input_dec[i]
+                results_cls_label[name[i]] = cls_label[i]
+                results_adj[name[i]] = adj[i]
+        file = open(folder_path+'enc_by_name.pkl','wb')
+        pkl.dump(results_pred, file)
+        file.close()
+        file = open(folder_path+'input_by_name.pkl','wb')
+        pkl.dump(results_lable, file)
+        file.close()
+        file = open(folder_path+'dec_by_name.pkl','wb')
+        pkl.dump(results_dec, file)
+        file.close()
+        file = open(folder_path+'cls_label_by_name.pkl','wb')
+        pkl.dump(results_cls_label, file)
+        file.close()
+        file = open(folder_path+'adj_by_name.pkl','wb')
+        pkl.dump(results_adj, file)
+        file.close()
+
+        
+        return
+    
+
+    def _process_one_batch(self, dataset_object, batch_x, batch_y, cls_label, mask, adj):
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float()
 
@@ -718,18 +522,30 @@ class Exp_Informer(Exp_Basic):
         elif self.args.padding==1:
             dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
         dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
-        
-        outputs = self.model(batch_x, cls_label, dec_inp, mask)
-        # if self.args.inverse:
-        #     outputs = dataset_object.inverse_transform(outputs) # here we need the ori dataset object -- by defu
-        # f_dim = -1 if self.args.features=='MS' else 0
-        # #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
-        # batch_y = batch_y.to(self.device)
+        # encoder - decoder
+        if self.args.use_amp:
+            with torch.cuda.amp.autocast():
+                if self.args.output_attention:
+                    outputs = self.model(batch_x, cls_label, dec_inp, mask, adj)[0]
+                else:
+                    outputs = self.model(batch_x, cls_label, dec_inp, mask, adj)
+        else:
+            if self.args.output_attention:
+                outputs, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask, adj)
+                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
+            else:
+                outputs, outputs_cls = self.model(batch_x, cls_label, dec_inp, mask, adj)
+        if self.args.inverse:
+            outputs = dataset_object.inverse_transform(outputs) # here we need the ori dataset object -- by defu
+        f_dim = -1 if self.args.features=='MS' else 0
+        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
+        batch_y = batch_y.to(self.device)
 
 
-        return outputs #, batch_y, outputs_cls, enc_out, dec_inp
+        return outputs, batch_y, outputs_cls
 
-    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
+
+    def _process_one_batch_retrieval(self, dataset_object, batch_x, batch_y, cls_label, mask, adj = [],retrival = True, reduce_hid = False):
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float()
 
@@ -751,106 +567,12 @@ class Exp_Informer(Exp_Basic):
                     enc_input = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
         else:
             if self.args.output_attention:
-                enc_input, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
+                enc_input, outputs_cls, _ = self.model(batch_x, cls_label, dec_inp, mask, adj=adj, retrival = retrival, reduce_hid = reduce_hid)
                 #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
             else:
-                enc_input, outputs_cls = self.model(batch_x, cls_label, dec_inp, mask, retrival = retrival, reduce_hid = reduce_hid)
+                enc_input, outputs_cls = self.model(batch_x, cls_label, dec_inp, mask, adj=adj,retrival = retrival, reduce_hid = reduce_hid)
        
         #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
         batch_y = batch_y.to(self.device)
 
         return enc_input, batch_y, dec_inp
-    
-    def _process_one_batch_interpolation(self, enc_out, x_dec, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
-        enc_out = torch.tensor(enc_out).float().unsqueeze(0).to(self.device)
-        x_dec = torch.tensor(x_dec).float().unsqueeze(0).to(self.device)
-        dec_inp = x_dec
-
-        # decoder input
-        # if self.args.padding==0:
-        #     dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
-        # elif self.args.padding==1:
-        #     dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
-        # dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
-        # encoder - decoder
-        if self.args.use_amp:
-            with torch.cuda.amp.autocast():
-                if self.args.output_attention:
-                    outputs = self.model.decode_exp(enc_out, x_dec)[0]
-                else:
-                    outputs = self.model.decode_exp(enc_out, x_dec)
-        else:
-            if self.args.output_attention:
-                outputs, outputs_cls, _ = self.model.decode_exp(enc_out, x_dec)
-                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
-            else:
-                outputs, outputs_cls, enc_out = self.model.forward_single(enc_out, x_dec, batch_x)
-        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
-        #batch_y = batch_y.to(self.device)
-
-
-        return outputs, outputs_cls, enc_out #enc_input, batch_y, dec_inp
-
-    def _process_one_batch_interpolation_with_enc(self, enc_out, x_dec, batch_x, batch_y, cls_label, mask, retrival = True, reduce_hid = False):
-        # enc_out = torch.tensor(enc_out).float().unsqueeze(0).to(self.device)
-        # enc_out=Variable(enc_out,requires_grad=True)
-        x_dec = torch.tensor(x_dec).float().unsqueeze(0).to(self.device)
-        dec_inp = x_dec
-
-        # decoder input
-        # if self.args.padding==0:
-        #     dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
-        # elif self.args.padding==1:
-        #     dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float()
-        # dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
-        # encoder - decoder
-        if self.args.use_amp:
-            with torch.cuda.amp.autocast():
-                if self.args.output_attention:
-                    outputs = self.model.decode_exp(enc_out, x_dec)[0]
-                else:
-                    outputs = self.model.decode_exp(enc_out, x_dec)
-        else:
-            if self.args.output_attention:
-                outputs, outputs_cls, _ = self.model.decode_exp(enc_out, x_dec)
-                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
-            else:
-                outputs, outputs_cls, enc_out = self.model.forward_with_enc(enc_out, x_dec, batch_x)
-        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
-        #batch_y = batch_y.to(self.device)
-
-
-        return outputs, outputs_cls, enc_out #enc_input, batch_y, dec_inp
-
-    def _process_one_batch_encoder(self, batch_x, cls_label, mask, retrival = True, reduce_hid = False):
-        # enc_out = torch.tensor(enc_out).float().unsqueeze(0).to(self.device)
-        # enc_out=Variable(enc_out,requires_grad=True)
-        # x_dec = torch.tensor(x_dec).float().unsqueeze(0).to(self.device)
-        # dec_inp = x_dec
-        batch_y = batch_x
-
-        # decoder input
-        if self.args.padding==0:
-            dec_inp = torch.zeros([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float().to(self.device)
-        elif self.args.padding==1:
-            dec_inp = torch.ones([batch_y.shape[0], batch_y.shape[1]-1, batch_y.shape[-1]]).float().to(self.device)
-        dec_inp = torch.cat([batch_y[:,:1,:], dec_inp], dim=1).float().to(self.device) # 32, 48, 7 -> 32, 72, 7
-        # encoder - decoder
-        if self.args.use_amp:
-            with torch.cuda.amp.autocast():
-                if self.args.output_attention:
-                    outputs = self.model.decode_exp(enc_out, x_dec)[0]
-                else:
-                    outputs = self.model.decode_exp(enc_out, x_dec)
-        else:
-            if self.args.output_attention:
-                outputs, outputs_cls, _ = self.model.decode_exp(enc_out, x_dec)
-                #outputs_cls = self.model(batch_x, cls_label, dec_inp, mask)
-            else:
-                enc_out, _ = self.model(batch_x, cls_label, dec_inp, mask, retrival = True)
-        #batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
-        #batch_y = batch_y.to(self.device)
-
-
-        return enc_out #enc_input, batch_y, dec_inp
-

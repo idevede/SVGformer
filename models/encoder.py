@@ -35,7 +35,7 @@ class EncoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x, attn_mask=None, curve_relationship = None):
         # x [B, L, D]
         # x = x + self.dropout(self.attention(
         #     x, x, x,
@@ -43,7 +43,8 @@ class EncoderLayer(nn.Module):
         # ))
         new_x, attn = self.attention(
             x, x, x,
-            attn_mask = attn_mask
+            attn_mask = attn_mask,
+            curve_relationship = curve_relationship
         )
         x = x + self.dropout(new_x)
 
@@ -59,14 +60,15 @@ class Encoder(nn.Module):
         self.attn_layers = nn.ModuleList(attn_layers)
         self.conv_layers = nn.ModuleList(conv_layers) if conv_layers is not None else None
         self.norm = norm_layer
-        self.linear =  nn.AdaptiveAvgPool1d(1) #nn.Linear(25, 1)
+        #self.linear = nn.Linear(25, 1)
+        self.linear =  nn.AdaptiveAvgPool1d(1)
 
-    def forward(self, x, attn_mask=None, reduce_hid =False):
-        # x [B, L, D]
+    def forward(self, x, attn_mask=None, reduce_hid =False, curve_relationship = None):
+        # x [B, L, D] 32, 70, 512
         attns = []
         if self.conv_layers is not None:
             for attn_layer, conv_layer in zip(self.attn_layers, self.conv_layers):
-                x, attn = attn_layer(x, attn_mask=attn_mask)
+                x, attn = attn_layer(x, attn_mask=attn_mask, curve_relationship = curve_relationship) # 32, 60, 512
                 x = conv_layer(x)
                 attns.append(attn)
             x, attn = self.attn_layers[-1](x, attn_mask=attn_mask)
@@ -84,16 +86,12 @@ class Encoder(nn.Module):
 
         return x, attns
 
-
 class EncoderStack(nn.Module):
     def __init__(self, encoders, inp_lens):
         super(EncoderStack, self).__init__()
         self.encoders = nn.ModuleList(encoders)
         self.inp_lens = inp_lens
-        self.linear = nn.AdaptiveAvgPool1d(1)
-        #Informer2020-font-deepsvg-format-averagepooling
-        #nn.Linear(25, 1)
-
+        # self.linear = nn.Linear(25, 1)
 
     def forward(self, x, attn_mask=None, reduce_hid = False):
         # x [B, L, D]
@@ -105,5 +103,5 @@ class EncoderStack(nn.Module):
         x_stack = torch.cat(x_stack, -2)
         if reduce_hid:
             x_stack = self.linear(x_stack.reshape(x_stack[0], x_stack[2], x_stack[1]))
-            #print(x_stack)
+            print(x_stack)
         return x_stack, attns

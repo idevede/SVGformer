@@ -54,14 +54,19 @@ class Dataset_Font(Dataset):
         data_label = pkl.load(F_label)
         data_name = pkl.load(F_name)
 
-        self.labels = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        #F_adj = open(path+'/data_adj.pkl', 'rb')
+        F_adj = open(path+'/cd_dic.pkl', 'rb')
+        data_adj = pkl.load(F_adj)
+
 
         self.data = []
-        # max_length = 0
+        max_length = 50
         self.categories = []
         self.name = []
+        self.adj = []
+
         for i in range(len(data_pkl)):
-            if len(data_pkl[i])>50:
+            if len(data_pkl[i])>max_length:
                 continue
             #data_single = np.load(path+'/'+file)
             data_single = data_pkl[i]
@@ -69,8 +74,10 @@ class Dataset_Font(Dataset):
             # data_single[data_copy == 1 ] = 1
             data_single = data_single.flatten()
             self.data.append(data_single)
-            self.categories.append(data_label[i])
+            self.categories.append(data_label[i].squeeze())
             self.name.append(data_name[i])
+            #self.adj.append(data_adj[data_name[i]][:50,:50])
+            self.adj.append(data_adj[data_name[i]][:max_length,:max_length])
             #self.categories.append(file[-5:-4])
             # if max_length < len(data):
             #     max_length = len(data)
@@ -101,7 +108,7 @@ class Dataset_Font(Dataset):
 
         self.max_length = max_length
         if self.max_length is None:
-            self.max_length = 50
+            self.max_length = max_length
             '''
             json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
             files= os.listdir(json_path)
@@ -141,116 +148,9 @@ class Dataset_Font(Dataset):
         layout = self.transform(layout, label)
         mask = (layout['x']!=-1).float()
         name = self.name[idx]
-        index = self.labels.find(name[-1])
+        adj = self.adj[idx]
+        return layout['x'], layout['y'], layout['label'], mask, name, adj
 
-        return layout['x'], layout['y'], layout['label'], mask, name, index
-
-class Dataset_Font_Val(Dataset):
-    def __init__(self, root_path, flag='train', size=None, 
-                 features='S', data_path='ETTh1.csv', 
-                 target='OT', scale=True, inverse=False, timeenc=0, freq='h', cols=None, max_length=None):
-    
-
-        path = root_path #"/home/defuc/sensei-fs-symlink/users/defuc/dataset/font/svg/data_npy"
-        #files= os.listdir(root_path)
-        F_data = open(path+'/data.pkl','rb')
-        F_length = open(path+'/data_length.pkl','rb')
-        F_label = open(path+'/data_label.pkl','rb')
-        F_name = open(path+'/data_name.pkl','rb')
-        data_pkl = pkl.load(F_data)
-        data_label = pkl.load(F_label)
-        data_name = pkl.load(F_name)
-
-        self.labels = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-
-        self.data = []
-        # max_length = 0
-        self.categories = []
-        self.name = []
-        for i in range(len(data_pkl)):
-            if len(data_pkl[i])>50:
-                continue
-            #data_single = np.load(path+'/'+file)
-            data_single = data_pkl[i]
-            # data_single[data_copy == 0 ] = 0
-            # data_single[data_copy == 1 ] = 1
-            data_single = data_single.flatten()
-            self.data.append(data_single)
-            self.categories.append(data_label[i])
-            self.name.append(data_name[i])
-            #self.categories.append(file[-5:-4])
-            # if max_length < len(data):
-            #     max_length = len(data)
-
-
-
-        # images, annotations, categories = data['images'], data['annotations'], data['categories']
-        # self.size = pow(2, precision)
-
-        # self.categories = {c["id"]: c for c in categories}
-        # self.colors = gen_colors(len(self.categories))
-
-        # self.json_category_id_to_contiguous_id = {
-        #     v: i + self.size for i, v in enumerate([c["id"] for c in self.categories.values()])
-        # }
-
-        # self.contiguous_category_id_to_json_id = {
-        #     v: k for k, v in self.json_category_id_to_contiguous_id.items()
-        # }
-
-        #self.vocab_size = self.size + len(self.categories) + 3  # bos, eos, pad tokens
-        self.vocab_size = 62 + 3  # 10 + 26 + 26 bos, eos, pad tokens 
-        self.bos_token = self.vocab_size - 3
-        self.eos_token = self.vocab_size - 2
-        self.pad_token = self.vocab_size - 1
-
-    
-
-        self.max_length = max_length
-        if self.max_length is None:
-            self.max_length = 50
-            '''
-            json_path = '/sensei-fs/users/defuc/dataset/Dataset_google_font_npy'
-            files= os.listdir(json_path)
-            data_all = []
-            # max_length = 0
-            self.max_length = 0
-            for file in files:
-                data_single = np.load(json_path+'/'+file)
-                mx = data_single.shape[0]
-                if mx>self.max_length:
-                    self.max_length = mx
-            '''
-            
-            self.max_length = int(self.max_length)
-        self.transform = Padding_Font(self.max_length*8, self.vocab_size)
-        
-
-
-    def __len__(self):
-        return len(self.data)
-
-    def render(self, layout):
-        
-        layout = layout.reshape(-1)
-        layout = layout[: len(layout) // 8 * 8].reshape(-1, 8)
-        return layout
-    
-    def inverse_transform(self, data):
-        return data
-
-    def __getitem__(self, idx):
-        # grab a chunk of (block_size + 1) tokens from the data
-        layout = torch.tensor(self.data[idx], dtype=torch.float32)
-        label = torch.tensor(self.categories[idx], dtype=torch.int32)
-        name = self.name[idx]
-        index = self.labels.find(name[-1])
-    
-        length = torch.tensor(len(layout)/8, dtype=torch.int32)
-        layout = self.transform(layout, label)
-        mask = (layout['x']!=-1).float()
-        return layout['x'], layout['y'], layout['label'], mask, name, index
 
 
 

@@ -6,6 +6,7 @@ import numpy as np
 
 from math import sqrt
 from utils.masking import TriangularCausalMask, ProbMask
+from utils.gcn_layers import GraphConvolution
 
 class FullAttention(nn.Module):
     def __init__(self, mask_flag=True, factor=5, scale=None, attention_dropout=0.1, output_attention=False):
@@ -15,7 +16,7 @@ class FullAttention(nn.Module):
         self.output_attention = output_attention
         self.dropout = nn.Dropout(attention_dropout)
         
-    def forward(self, queries, keys, values, attn_mask):
+    def forward(self, queries, keys, values, attn_mask, curve_relationship = None):
         B, L, H, E = queries.shape
         _, S, _, D = values.shape
         scale = self.scale or 1./sqrt(E)
@@ -43,6 +44,9 @@ class ProbAttention(nn.Module):
         self.mask_flag = mask_flag
         self.output_attention = output_attention
         self.dropout = nn.Dropout(attention_dropout)
+
+        self.linear_curve = nn.Linear( 64, 25)
+        self.gc1 = GraphConvolution(64, 25)
 
     def _prob_QK(self, Q, K, sample_k, n_top): # n_top: c*ln(L_q)
         # Q [B, H, L, D]
@@ -85,7 +89,7 @@ class ProbAttention(nn.Module):
             attn_mask = ProbMask(B, H, L_Q, index, scores, device=V.device)
             scores.masked_fill_(attn_mask.mask, -np.inf)
 
-        attn = torch.softmax(scores, dim=-1) # nn.Softmax(dim=-1)(scores)
+        attn = torch.softmax(scores, dim=-1) # nn.Softmax(dim=-1)(scores) # here need to add attention, 在这里添加attention
 
         context_in[torch.arange(B)[:, None, None],
                    torch.arange(H)[None, :, None],
@@ -97,11 +101,11 @@ class ProbAttention(nn.Module):
         else:
             return (context_in, None)
 
-    def forward(self, queries, keys, values, attn_mask):
+    def forward(self, queries, keys, values, attn_mask, curve_relationship = None):
         B, L_Q, H, D = queries.shape
         _, L_K, _, _ = keys.shape
 
-        queries = queries.transpose(2,1)
+        queries = queries.transpose(2,1) # 32,8,60,64
         keys = keys.transpose(2,1)
         values = values.transpose(2,1)
 
@@ -111,8 +115,14 @@ class ProbAttention(nn.Module):
         U_part = U_part if U_part<L_K else L_K
         u = u if u<L_Q else L_Q
         
-        scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) 
+        scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) # 32,8,60,64 -> 32,8,25,60
+        # # scores_top: 32,8, 25, 70
+        # # 这里添加了relationship
+        if curve_relationship is not None:
+            curve_relationship = self.linear_curve(curve_relationship.transpose(2,1)).transpose(3,2)
+            #curve_relationship = self.gc1(curve_relationship.transpose(2,1)).transpose(3,2)
 
+            scores_top += curve_relationship
         # add scale factor
         scale = self.scale or 1./sqrt(D)
         if scale is not None:
@@ -127,7 +137,7 @@ class ProbAttention(nn.Module):
 
 class AttentionLayer(nn.Module):
     def __init__(self, attention, d_model, n_heads, 
-                 d_keys=None, d_values=None, mix=False):
+                 d_keys=None, d_values=None, mix=False, first_head = False):
         super(AttentionLayer, self).__init__()
 
         d_keys = d_keys or (d_model//n_heads)
@@ -140,22 +150,41 @@ class AttentionLayer(nn.Module):
         self.out_projection = nn.Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
         self.mix = mix
+        self.first_head = first_head
 
-    def forward(self, queries, keys, values, attn_mask):
+        self.curve_projection = nn.Linear(d_model, d_keys * n_heads)
+
+    def forward(self, queries, keys, values, attn_mask, curve_relationship = None):
+        if isinstance(queries,tuple):
+            queries = queries[0]
+            keys = keys[0]
+            values = values[0]
         B, L, _ = queries.shape
         _, S, _ = keys.shape
         H = self.n_heads
 
-        queries = self.query_projection(queries).view(B, L, H, -1)
+        queries = self.query_projection(queries).view(B, L, H, -1) # 32,70,512 -> 32, 70, 8, 64
         keys = self.key_projection(keys).view(B, S, H, -1)
         values = self.value_projection(values).view(B, S, H, -1)
+        if self.first_head:
+            curve_relationship = self.curve_projection(curve_relationship).view(B, L, H, -1)
+            out, attn = self.inner_attention(
+                queries,
+                keys,
+                values,
+                attn_mask,
+                curve_relationship
+            )
+            self.first_head = False
 
-        out, attn = self.inner_attention(
-            queries,
-            keys,
-            values,
-            attn_mask
-        )
+        else:
+            out, attn = self.inner_attention(
+                queries,
+                keys,
+                values,
+                attn_mask
+                
+            )
         if self.mix:
             out = out.transpose(2,1).contiguous()
         out = out.view(B, L, -1)

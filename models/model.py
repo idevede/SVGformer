@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-#from utils.masking import TriangularCausalMask, ProbMask
+from utils.masking import TriangularCausalMask, ProbMask
 from models.encoder import Encoder, EncoderLayer, ConvLayer, EncoderStack
 from models.decoder import Decoder, DecoderLayer
 from models.attn import FullAttention, ProbAttention, AttentionLayer
 from models.embed import DataEmbedding
+from utils.gcn_layers import GraphConvolution
 
 class Informer(nn.Module):
     def __init__(self, enc_in, dec_in, c_out, seq_len, label_len, out_len, 
@@ -65,100 +66,21 @@ class Informer(nn.Module):
         self.projection = nn.Linear(d_model, c_out, bias=True)
         self.cls = nn.Linear(d_model, 3, bias=True) # 3 classes of the curve type
 
-        self.ln_f = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, 62, bias=False) # 62 is the fonts type 
+        self.gc2 = GraphConvolution(d_model, d_model)
 
-
-
+        self.head_2 = nn.Linear(50, 25, bias=False)
         
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, 
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, adj,
+                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
 
         self.pred_len = x_enc.shape[1]-1
         #self.pred_len = x_enc.shape[1]
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
-        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = True)
+        enc_out_2 = self.gc2(enc_out,adj)
+        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask,  curve_relationship = enc_out_2) # torch.Size([32, 25, 512])
 
-        return self.head(enc_out.reshape(enc_out.shape[0], enc_out.shape[2], enc_out.shape[1]))
-
-
-
-        # if retrival:
-        #     return enc_out, attns
-
-        # dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        # dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
-        # dec_reg_out = self.projection(dec_out)
-        # dec_cls_out = self.cls(dec_out)
+        #enc_out += self.head_2(enc_out_2.transpose(1,2)).transpose(1, 2)
         
-        # # dec_out = self.end_conv1(dec_out)
-        # # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
-        # if self.output_attention:
-        #     return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
-        # else:
-        #     return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out # [B, L, D]
-    
-    def forward_single(self, enc_out, x_dec, x_enc, x_mark_enc=None, x_mark_dec =None,
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
-
-        self.pred_len = x_enc.shape[1]-1
-        #self.pred_len = x_enc.shape[1]
-        enc_out2 = self.enc_embedding(x_enc, x_mark_enc)
-        # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
-        enc_out2, attns = self.encoder(enc_out2, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
-
-        # if retrival:
-        #     return enc_out, attns
-        
-
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out2, x_mask=dec_self_mask, cross_mask=dec_enc_mask, reduce_hid=reduce_hid)
-        dec_reg_out = self.projection(dec_out)
-        dec_cls_out = self.cls(dec_out)
-        
-        # dec_out = self.end_conv1(dec_out)
-        # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
-        if self.output_attention:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
-        else:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out2 # [B, L, D]
-
-    def forward_with_enc(self, enc_out, x_dec, x_enc, x_mark_enc=None, x_mark_dec =None,
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
-
-        self.pred_len = x_enc.shape[1]-1
-        
-        enc_out2 = self.enc_embedding(x_enc, x_mark_enc)
-        # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
-        enc_out2, attns = self.encoder(enc_out2, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
-        #enc_out
-        # if retrival:
-        #     return enc_out, attns
-        #with torch.no_grad():
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
-        dec_reg_out = self.projection(dec_out)
-        dec_cls_out = self.cls(dec_out)
-        
-        # dec_out = self.end_conv1(dec_out)
-        # dec_out = self.end_conv2(dec_out.transpose(2,1)).transpose(1,2)
-        if self.output_attention:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], attns
-        else:
-            return dec_reg_out[:,-self.pred_len:,:], dec_cls_out[:,-self.pred_len:,:], enc_out2 # [B, L, D]
-    
-    def decode_exp(self, enc_out, x_dec, x_mark_dec=None, 
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
-
-        self.pred_len = x_dec.shape[1]-1
-        #self.pred_len = x_enc.shape[1]
-#         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-#         # enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask) # torch.Size([32, 25, 512])
-#         enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
-
-#         if retrival:
-#             return enc_out, attns
 
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
@@ -234,20 +156,17 @@ class InformerStack(nn.Module):
         self.projection = nn.Linear(d_model, c_out, bias=True)
         
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, 
-                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None, retrival = False, reduce_hid = False):
+                enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
         
         self.pred_len = x_enc.shape[1]
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask, reduce_hid = reduce_hid)
-
-        if retrival:
-            return enc_out, attns
+        enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask)
 
         # bottle net -- font into one space 平移不变性 with VIT
         # position embedding
 
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask, reduce_hid = reduce_hid)
+        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
         dec_out = self.projection(dec_out)
         
         
