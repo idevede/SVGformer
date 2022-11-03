@@ -60,7 +60,7 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
-parser.add_argument('--gpu', type=int, default=2, help='gpu')
+parser.add_argument('--gpu', type=int, default=3, help='gpu')
 parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
 parser.add_argument('--devices', type=str, default='0,1,2,3',help='device ids of multile gpus')
 
@@ -100,7 +100,7 @@ Exp = Exp_Informer
 
 for ii in range(args.itr):
     # setting record of experiments
-    setting = "Fonts_results_with_GCN_inAtt"
+    setting = "Fonts_results_with_GCN_inAtt_no_emb"
 
 
     exp = Exp(args) # set experiments

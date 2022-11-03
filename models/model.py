@@ -27,16 +27,24 @@ class Informer(nn.Module):
         Attn = ProbAttention if attn=='prob' else FullAttention
         # Encoder
         self.encoder = Encoder(
-            [
-                EncoderLayer(
+            
+                [EncoderLayer(
+                    AttentionLayer(Attn(False, factor, attention_dropout=dropout, output_attention=output_attention), 
+                                d_model, n_heads, mix=False, first_head = True),
+                    d_model,
+                    d_ff,
+                    dropout=dropout,
+                    activation=activation
+                )]+
+                [EncoderLayer(
                     AttentionLayer(Attn(False, factor, attention_dropout=dropout, output_attention=output_attention), 
                                 d_model, n_heads, mix=False),
                     d_model,
                     d_ff,
                     dropout=dropout,
                     activation=activation
-                ) for l in range(e_layers)
-            ],
+                ) for l in range(e_layers-1)]
+            ,
             [
                 ConvLayer(
                     d_model
